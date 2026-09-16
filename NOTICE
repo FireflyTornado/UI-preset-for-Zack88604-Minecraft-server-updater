@@ -1,0 +1,13 @@
+FireflyTornado JavaFX UI Preset
+Copyright (c) 2026 FireflyTornado
+
+Based on minecraft-server-updater-for656 by Zack88604:
+https://github.com/Zack88604/minecraft-server-updater-for656
+
+Portions derived from the upstream project remain Copyright (c) 2026
+Zack88604 and are used under the MIT License. The interface credits the UI
+redesign to Eternity_Riguru.
+
+This distribution embeds OpenJFX runtime modules. OpenJFX is licensed under
+GPL version 2 with the Classpath Exception. See META-INF/licenses/openjfx/ and
+META-INF/THIRD_PARTY_NOTICES.md in the preset JAR.

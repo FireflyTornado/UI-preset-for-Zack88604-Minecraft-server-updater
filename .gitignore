@@ -1,0 +1,14 @@
+/build/
+/dist/
+/lib/
+/test/
+/verify-helper.ps1
+/.test-work/
+*.tmp
+*.log
+hs_err_pid*.log
+replay_pid*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

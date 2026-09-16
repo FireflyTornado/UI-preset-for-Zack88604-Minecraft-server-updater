@@ -1,0 +1,7 @@
+helper-main-class=com.fireflytornado.mcupdate.javafx.JavaFxPresetEntrypoint
+minimum-java-version=17
+module-path=runtime/javafx-base-21.0.4-win.jar,runtime/javafx-graphics-21.0.4-win.jar,runtime/javafx-controls-21.0.4-win.jar
+add-modules=javafx.controls
+sha256.runtime/javafx-base-21.0.4-win.jar=@JAVAFX_BASE_SHA256@
+sha256.runtime/javafx-graphics-21.0.4-win.jar=@JAVAFX_GRAPHICS_SHA256@
+sha256.runtime/javafx-controls-21.0.4-win.jar=@JAVAFX_CONTROLS_SHA256@

@@ -1,5 +1,7 @@
 # FireflyTornado JavaFX UI Preset
 
+[English](README.md) | 简体中文
+
 这是一个供 Minecraft 自动更新 agent 加载的 V2 `java-helper` GUI preset。
 JavaFX 窗口运行在独立 helper JVM 中，不会让 Minecraft JVM 加载 `javafx.*`。
 
@@ -23,17 +25,12 @@ JavaFX 窗口运行在独立 helper JVM 中，不会让 Minecraft JVM 加载 `ja
 build.bat
 ```
 
-构建脚本默认把 `main/agent/src` 编译到临时目录作为 provided API；也可以直接指定
-已经构建好的 core：
+构建所需的 updater API 契约保存在本项目的 `provided-api/`，仅用于编译，不会打入
+preset JAR。
 
-```powershell
-./build.ps1 -CoreJar ../main/agent/UpdateAgent_core.jar `
-    -CoreSourceDir ../path-that-does-not-exist
-```
-
-构建只使用本项目自己的 `lib/javafx/` 依赖缓存，不会读取 `main-ui` 或其他本地项目。
-依赖缺失时会自动从 Maven Central 下载。固定的 OpenJFX 21.0.4 Windows 依赖还会与
-脚本内置的 SHA-256 比较，校验通过后才参与编译和打包。`lib/` 不会进入版本控制。
+OpenJFX 依赖缓存在本项目的 `lib/javafx/`；缺失时会自动从 Maven Central 下载。
+固定的 OpenJFX 21.0.4 Windows 依赖还会与脚本内置的 SHA-256 比较，校验通过后才
+参与编译和打包。
 
 最终发布产物保留在：
 

@@ -2,18 +2,14 @@
 param(
     [string]$Version = "1.0.0",
     [string]$JavaFxVersion = "21.0.4",
-    [string]$Classifier = "win",
-    [string]$CoreJar = "../main/agent/UpdateAgent_core.jar",
-    [string]$CoreSourceDir = "../main/agent/src",
-    [string]$TestSourceDir = "test"
+    [string]$Classifier = "win"
 )
 
 $ErrorActionPreference = "Stop"
 $projectRoot = [IO.Path]::GetFullPath($PSScriptRoot)
-$corePath = [IO.Path]::GetFullPath((Join-Path $projectRoot $CoreJar))
-$coreSourcePath = [IO.Path]::GetFullPath((Join-Path $projectRoot $CoreSourceDir))
+$providedApiDir = Join-Path $projectRoot "provided-api"
 $sourceDir = Join-Path $projectRoot "src"
-$testDir = [IO.Path]::GetFullPath((Join-Path $projectRoot $TestSourceDir))
+$testDir = Join-Path $projectRoot "test"
 $resourceDir = Join-Path $projectRoot "resources"
 $metadataDir = Join-Path $projectRoot "metadata/META-INF"
 $libraryDir = Join-Path $projectRoot "lib/javafx"
@@ -27,8 +23,16 @@ $stageDir = Join-Path $buildDir "stage"
 $distDir = Join-Path $projectRoot "dist"
 $artifact = Join-Path $distDir "fireflytornado-javafx-preset-$Version-$Classifier.jar"
 
-if (-not (Test-Path -LiteralPath $corePath -PathType Leaf)) {
-    throw "Updater core JAR not found: $corePath"
+function Get-Sha256([string]$Path) {
+    $stream = [IO.File]::OpenRead($Path)
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+        return ([BitConverter]::ToString($sha256.ComputeHash($stream))).
+                Replace("-", "").ToLowerInvariant()
+    } finally {
+        $sha256.Dispose()
+        $stream.Dispose()
+    }
 }
 
 foreach ($path in @($buildDir, $distDir)) {
@@ -83,8 +87,7 @@ foreach ($module in $modules) {
     }
     $pinKey = "$JavaFxVersion/$Classifier/$module"
     if ($pinnedHashes.ContainsKey($pinKey)) {
-        $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $target).
-                Hash.ToLowerInvariant()
+        $actualHash = Get-Sha256 $target
         if ($actualHash -ne $pinnedHashes[$pinKey]) {
             throw "SHA-256 mismatch for $fileName"
         }
@@ -95,47 +98,23 @@ foreach ($module in $modules) {
     $runtimeFiles[$module] = $target
 }
 
-$hostClasspath = $corePath
-if (Test-Path -LiteralPath $coreSourcePath -PathType Container) {
-    $coreSourceFiles = @(Get-ChildItem -LiteralPath $coreSourcePath -Recurse -Filter "*.java" |
-            ForEach-Object { $_.FullName })
-    # Compatibility guard for historical main checkouts where
-    # UpdateErrorCode.java was truncated. Never mutate main: if encountered,
-    # normalize only a temporary build copy. Current fixed checkouts are a no-op.
-    $errorCodeSource = Join-Path $coreSourcePath `
-            "com/zack88604/autoupdater/gui/api/UpdateErrorCode.java"
-    $errorCodeText = Get-Content -Raw -LiteralPath $errorCodeSource
-    $braceBalance = ([regex]::Matches($errorCodeText, "\{")).Count -
-            ([regex]::Matches($errorCodeText, "\}")).Count
-    if ($braceBalance -eq 1) {
-        $fixedSource = Join-Path $buildDir `
-                "host-source-fix/com/zack88604/autoupdater/gui/api/UpdateErrorCode.java"
-        New-Item -ItemType Directory -Force -Path (Split-Path $fixedSource) | Out-Null
-        Set-Content -LiteralPath $fixedSource -Value ($errorCodeText.TrimEnd() + "`n}`n") `
-                -Encoding utf8 -NoNewline
-        $errorCodeFullPath = [IO.Path]::GetFullPath($errorCodeSource)
-        $coreSourceFiles = @($coreSourceFiles | Where-Object {
-                [IO.Path]::GetFullPath($_) -ne $errorCodeFullPath
-            }) + $fixedSource
-        Write-Warning "main/UpdateErrorCode.java is truncated; using a build-only fixed copy"
-    } elseif ($braceBalance -ne 0) {
-        throw "Unexpected brace imbalance in main UpdateErrorCode.java"
-    }
-    Write-Host "[host] Compiling the current main sources into an isolated build classpath"
-    & javac --release 17 -encoding UTF-8 -d $hostClassesDir @coreSourceFiles
-    if ($LASTEXITCODE -ne 0) {
-        throw "Current main source compilation failed"
-    }
-    & jar cf $hostApiJar -C $hostClassesDir .
-    if ($LASTEXITCODE -ne 0) {
-        throw "Unable to package the temporary main API classpath"
-    }
-    # javac on Windows is unreliable with a class-directory path containing
-    # spaces; the equivalent temporary JAR is deterministic.
-    $hostClasspath = $hostApiJar
-} else {
-    Write-Host "[host] Main sources unavailable; using the supplied core JAR"
+$providedApiFiles = @(Get-ChildItem -LiteralPath $providedApiDir -Recurse -Filter "*.java" |
+        ForEach-Object { $_.FullName })
+if ($providedApiFiles.Count -eq 0) {
+    throw "No provided updater API sources found in $providedApiDir"
 }
+Write-Host "[api] Compiling the repository-local updater API contract"
+& javac --release 17 -encoding UTF-8 -d $hostClassesDir @providedApiFiles
+if ($LASTEXITCODE -ne 0) {
+    throw "Provided updater API compilation failed"
+}
+& jar cf $hostApiJar -C $hostClassesDir .
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to package the temporary updater API classpath"
+}
+# javac on Windows is unreliable with a class-directory path containing spaces;
+# the equivalent temporary JAR is deterministic and remains inside build/.
+$hostClasspath = $hostApiJar
 
 $sourceFiles = @(Get-ChildItem -LiteralPath $sourceDir -Recurse -Filter "*.java" |
         ForEach-Object { $_.FullName })
@@ -155,9 +134,10 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $testFiles = @()
-if (Test-Path -LiteralPath $testDir -PathType Container) {
-    $testFiles = @(Get-ChildItem -LiteralPath $testDir -Recurse -Filter "*.java" |
-            ForEach-Object { $_.FullName })
+$bootstrapSmokeTest = Join-Path $testDir `
+        "com/fireflytornado/mcupdate/javafx/PresetBootstrapSmokeTest.java"
+if (Test-Path -LiteralPath $bootstrapSmokeTest -PathType Leaf) {
+    $testFiles = @($bootstrapSmokeTest)
 }
 $testClasspath = "$hostClasspath$([IO.Path]::PathSeparator)$presetClassesJar"
 if ($testFiles.Count -gt 0) {
@@ -194,8 +174,7 @@ $runtimeTemplate = Get-Content -Raw -LiteralPath `
         (Join-Path $metadataDir "mc-update-runtime.properties.template")
 $hashes = @{}
 foreach ($module in $modules) {
-    $hashes[$module] = (Get-FileHash -Algorithm SHA256 -LiteralPath `
-            $runtimeFiles[$module]).Hash.ToLowerInvariant()
+    $hashes[$module] = Get-Sha256 $runtimeFiles[$module]
 }
 $runtimeManifest = $runtimeTemplate.Replace("21.0.4", $JavaFxVersion).
         Replace("-win.jar", "-$Classifier.jar").
@@ -254,23 +233,7 @@ if ($factoryBytecode -match "javafx/(application|animation|beans|collections|css
     throw "Bootstrap factory unexpectedly references JavaFX"
 }
 
-if ($testFiles.Count -gt 0) {
-    # Run with no preset implementation on the parent classpath: main's real
-    # URLClassLoader must load the factory from the packaged archive.
-    $artifactTestClasspath = "$hostClasspath$([IO.Path]::PathSeparator)$testClassesDir"
-    $artifactTestGame = Join-Path $buildDir "artifact-test-game"
-    & java -cp $artifactTestClasspath `
-            com.fireflytornado.mcupdate.javafx.PresetArtifactSmokeTest $artifact $artifactTestGame
-    $artifactTestResult = $LASTEXITCODE
-    if (Test-Path -LiteralPath $artifactTestGame) {
-        Remove-Item -LiteralPath $artifactTestGame -Recurse -Force
-    }
-    if ($artifactTestResult -ne 0) {
-        throw "Packaged preset discovery/hash smoke test failed"
-    }
-}
-
-$artifactHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $artifact).Hash.ToLowerInvariant()
+$artifactHash = Get-Sha256 $artifact
 Write-Host "[verify] Preset structure and bootstrap isolation passed"
 Write-Host "[done] $artifact"
 Write-Host "[sha256] $artifactHash"

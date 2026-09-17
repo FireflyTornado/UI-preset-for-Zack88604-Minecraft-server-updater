@@ -221,6 +221,7 @@ final class JavaFxUpdateView implements UpdateView {
     private final Pane dlShimmerLayer = new Pane();
     private final Region dlShimmer = new Region();
     private final Label lblDlSpeed = new Label("");
+    private final DownloadSpeedSampler downloadSpeedSampler = new DownloadSpeedSampler();
 
     // One reusable interpolation Timeline per bar. They are stopped on every
     // retarget, reset, file switch and terminal transition.
@@ -620,6 +621,12 @@ final class JavaFxUpdateView implements UpdateView {
             return;
         }
         if (!dl.isActive()) {
+            // DOWNLOADING briefly becomes inactive between managed files. Keep
+            // the session sampler alive across that gap; terminal/other phases
+            // really end the session and start the next download from zero.
+            if (state.getPhase() != UpdatePhase.DOWNLOADING) {
+                downloadSpeedSampler.reset();
+            }
             hideDownloadArea();
             updateStatusImage(phase);
             applyWindowHeight();
@@ -644,6 +651,7 @@ final class JavaFxUpdateView implements UpdateView {
             // Defensive: the reducer normally carries the DOWNLOADING phase.
             setPhase(UpdatePhase.DOWNLOADING);
         }
+        String speedText = formatSpeed(downloadSpeedSampler.update(dl, System.nanoTime()));
         lblDlFile.setText(dl.getPath() == null ? "" : dl.getPath());
         if (dl.getTotalBytes() > 0) {
             double target = clampProgress(dl.getDownloadedBytes() / (double) dl.getTotalBytes());
@@ -663,7 +671,7 @@ final class JavaFxUpdateView implements UpdateView {
                 hasMeaningfulFileProgress = true;
                 lastMeaningfulFileProgress = target;
                 lastMeaningfulFilePath = dl.getPath();
-                lastMeaningfulFileSpeed = formatSpeed(dl.getBytesPerSecond());
+                lastMeaningfulFileSpeed = speedText;
             }
             boolean animate = phase == UpdatePhase.DOWNLOADING
                     && fileProgressInitialized
@@ -683,7 +691,7 @@ final class JavaFxUpdateView implements UpdateView {
             fileProgressInitialized = false;
             lastFileTarget = Double.NaN;
         }
-        lblDlSpeed.setText(formatSpeed(dl.getBytesPerSecond()));
+        lblDlSpeed.setText(speedText);
         showDownloadArea();
     }
 
@@ -893,6 +901,7 @@ final class JavaFxUpdateView implements UpdateView {
         lastFileTarget = Double.NaN;
         overallProgressInitialized = false;
         fileProgressInitialized = false;
+        downloadSpeedSampler.reset();
     }
 
     private void startShimmer() {
@@ -1842,5 +1851,4 @@ final class JavaFxUpdateView implements UpdateView {
         return screen.getVisualBounds();
     }
 }
-
 

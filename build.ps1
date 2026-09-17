@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Version = "1.0.0",
+    [string]$Version = "1.0.1",
     [string]$JavaFxVersion = "21.0.4",
     [string]$Classifier = "win"
 )
@@ -185,8 +185,8 @@ Set-Content -LiteralPath (Join-Path $stageDir "META-INF/mc-update-runtime.proper
         -Value $runtimeManifest -Encoding ascii -NoNewline
 
 $guiMetadataPath = Join-Path $stageDir "META-INF/mc-update-gui.properties"
-$guiMetadata = (Get-Content -Raw -LiteralPath $guiMetadataPath).
-        Replace("version=1.0.0", "version=$Version")
+$guiMetadata = (Get-Content -Raw -LiteralPath $guiMetadataPath) `
+        -replace '(?m)^version=.*$', "version=$Version"
 Set-Content -LiteralPath $guiMetadataPath -Value $guiMetadata -Encoding ascii -NoNewline
 
 Write-Host "[build] Packaging $artifact"

@@ -19,41 +19,41 @@ final class ErrorHintResolver {
         UpdateErrorCode errorCode = state.getErrorCode();
 
         if (errorCode == UpdateErrorCode.NETWORK) {
-            hints.add("Check your internet connection, then try the update again.");
-            hints.add("If you use a proxy, VPN, or firewall, allow the updater to reach the update server.");
+            hints.add(Lang.text("help.network.check"));
+            hints.add(Lang.text("help.network.access"));
         } else if (errorCode == UpdateErrorCode.MANIFEST_AUTHENTICATION) {
-            hints.add("Do not bypass this warning or accept an unverified update source.");
-            hints.add("Ask the server administrator to verify the configured Ed25519 key and manifest signature.");
+            hints.add(Lang.text("help.authentication.warning"));
+            hints.add(Lang.text("help.authentication.admin"));
         } else if (errorCode == UpdateErrorCode.CONFIGURATION) {
-            hints.add("Check the server URL and manifest key in mc-update.properties.");
-            hints.add("Ask the server administrator for the expected configuration values.");
+            hints.add(Lang.text("help.configuration.check"));
+            hints.add(Lang.text("help.configuration.admin"));
         } else if (errorCode == UpdateErrorCode.FILESYSTEM) {
-            hints.add("Close Minecraft and any launcher or program using files in the game folder.");
-            hints.add("Make sure the game folder is writable and the drive has enough free space.");
+            hints.add(Lang.text("help.filesystem.close"));
+            hints.add(Lang.text("help.filesystem.writableSpace"));
         } else if (containsAny(context, "timeout", "timed out", "connection", "connect",
                 "network", "socket", "reset by peer", "unreachable", "dns",
                 "unknown host", "http", "ssl", "certificate")) {
-            hints.add("Check your internet connection, then try the update again.");
-            hints.add("If you use a proxy, VPN, or firewall, allow the updater to reach the update server.");
+            hints.add(Lang.text("help.network.check"));
+            hints.add(Lang.text("help.network.access"));
         } else if (containsAny(context, "access denied", "permission denied", "not permitted",
                 "unauthorized", "read-only", "readonly", "being used", "in use",
                 "locked", "another process")) {
-            hints.add("Close Minecraft and any launcher or program using files in the game folder.");
-            hints.add("Make sure your account can write to the game folder, then run the update again.");
+            hints.add(Lang.text("help.filesystem.close"));
+            hints.add(Lang.text("help.filesystem.writable"));
         } else if (containsAny(context, "no space", "disk full", "insufficient space",
                 "not enough space", "out of space")) {
-            hints.add("Free some disk space on the drive containing the game folder.");
-            hints.add("Run the update again after confirming the drive has room for the download.");
+            hints.add(Lang.text("help.disk.free"));
+            hints.add(Lang.text("help.disk.retry"));
         } else if (containsAny(context, "checksum", "hash mismatch", "digest", "corrupt",
                 "integrity", "unexpected size")) {
-            hints.add("Try the update again; the downloaded file may have been incomplete.");
-            hints.add("If it fails again, temporarily disable caching proxies or download accelerators.");
+            hints.add(Lang.text("help.integrity.retry"));
+            hints.add(Lang.text("help.integrity.cache"));
         } else {
-            hints.add("Try the update again after closing Minecraft and its launcher.");
-            hints.add("Check Details for the failed file or server message.");
+            hints.add(Lang.text("help.generic.retry"));
+            hints.add(Lang.text("help.generic.details"));
         }
 
-        hints.add("If the problem continues, copy the Details log when asking for support.");
+        hints.add(Lang.text("help.support"));
         return List.copyOf(hints.subList(0, Math.min(3, hints.size())));
     }
 
@@ -83,5 +83,4 @@ final class ErrorHintResolver {
         return false;
     }
 }
-
 

@@ -204,7 +204,7 @@ final class JavaFxUpdateView implements UpdateView {
     private static final String IMG_TROUBLE = "/images/trouble.png";
 
     // Overall progress area
-    private final Label lblStatus = new Label("Preparing update…");
+    private final Label lblStatus = new Label(Lang.text("status.preparing"));
     private final Label lblDescription = new Label("");
     private final HBox overallArea = new HBox(6);
     private final ProgressBar overallBar = new ProgressBar(0);
@@ -271,18 +271,18 @@ final class JavaFxUpdateView implements UpdateView {
     private String lastDlPath;  // guards filesSeen against per-file progress ticks
 
     // Details area (Server URL, Game Directory, full log)
-    private final TitledPane detailsPane = new TitledPane("Details", null);
-    private final Label lblServer = new Label("Server: -");
+    private final TitledPane detailsPane = new TitledPane(Lang.text("details.title"), null);
+    private final Label lblServer = new Label(Lang.text("details.server.single", "-"));
     private final Label lblGameDir = new Label();
     private final TextArea logArea = new TextArea();
 
     // Debug close button
-    private final Button btnClose = new Button("Close");
+    private final Button btnClose = new Button(Lang.text("action.close"));
 
     // ERROR-only lightweight action. It lives in the content header (not the
     // custom window title bar) and is unmanaged outside ERROR, so it reserves
     // no space in any other phase.
-    private final Button btnErrorHelp = new Button("? Get help");
+    private final Button btnErrorHelp = new Button(Lang.text("action.getHelp"));
     private UpdateUiState errorState;
     private boolean recoveryDecisionPending;
 
@@ -337,7 +337,7 @@ final class JavaFxUpdateView implements UpdateView {
     // Custom title bar (frameless window): the title label doubles as the drag
     // region; the × button reuses the normal close-request path.
     private final HBox titleBar = new HBox();
-    private final Label lblWindowTitle = new Label("Minecraft Update Check");
+    private final Label lblWindowTitle = new Label(Lang.text("window.title"));
     private final Button btnWindowClose = new Button("✕");
     // Drag offsets captured on mouse press, applied on mouse drag.
     private double dragX;
@@ -477,8 +477,8 @@ final class JavaFxUpdateView implements UpdateView {
                 if (isUpdaterDownload(state)) {
                     return;
                 }
-                lblStatus.setText("Preparing update…");
-                lblDescription.setText("Connecting to update server");
+                lblStatus.setText(Lang.text("status.preparing"));
+                lblDescription.setText(Lang.text("status.preparing.description"));
                 break;
             case CHECKING: {
                 int[] counts = extractFileCounts(state.getStatus());
@@ -486,11 +486,12 @@ final class JavaFxUpdateView implements UpdateView {
                     filesTotal = counts[1];
                 }
                 if (counts != null) {
-                    lblStatus.setText("Checking files…");
-                    lblDescription.setText(formatCount(counts[0]) + " of "
-                            + formatCount(counts[1]) + " files checked");
+                    lblStatus.setText(Lang.text("status.checking"));
+                    lblDescription.setText(Lang.text("status.checking.description",
+                            formatCount(counts[0]), formatCount(counts[1])));
                 } else {
-                    lblStatus.setText(displayOrDefault(state.getStatus(), "Checking files…"));
+                    lblStatus.setText(displayOrDefault(state.getStatus(),
+                            Lang.text("status.checking")));
                     lblDescription.setText(displayOrDefault(state.getDescription(), ""));
                 }
                 break;
@@ -502,17 +503,18 @@ final class JavaFxUpdateView implements UpdateView {
                     lastDlPath = path;
                     filesSeen++;
                 }
-                lblStatus.setText("Downloading update…");
+                lblStatus.setText(Lang.text("status.downloading"));
                 lblDescription.setText(filesTotal > 0
-                        ? formatCount(filesSeen) + " of " + formatCount(filesTotal) + " files"
-                        : formatCount(filesSeen) + " file(s)");
+                        ? Lang.text("status.downloading.known",
+                                formatCount(filesSeen), formatCount(filesTotal))
+                        : Lang.text("status.downloading.unknown", formatCount(filesSeen)));
                 break;
             }
             case CLEANING:
-                lblStatus.setText("Cleaning up…");
+                lblStatus.setText(Lang.text("status.cleaning"));
                 lblDescription.setText(state.getDescription() == null
                         || state.getDescription().isEmpty()
-                        ? "Removing files that are no longer needed"
+                        ? Lang.text("status.cleaning.description")
                         : state.getDescription());
                 break;
             case SUCCESS: {
@@ -520,12 +522,12 @@ final class JavaFxUpdateView implements UpdateView {
                 if (s != null && s.getUpdatedFiles() > 0) {
                     // Success is split into a main title and a subtitle so the
                     // green accent marks only the headline.
-                    lblStatus.setText("Update complete");
-                    lblDescription.setText(formatFiles(s.getUpdatedFiles())
-                            + " updated · Launching Minecraft…");
+                    lblStatus.setText(Lang.text("status.success.updated"));
+                    lblDescription.setText(Lang.text("status.success.updated.description",
+                            formatFiles(s.getUpdatedFiles())));
                 } else {
-                    lblStatus.setText("You're up to date");
-                    lblDescription.setText("Launching Minecraft…");
+                    lblStatus.setText(Lang.text("status.success.current"));
+                    lblDescription.setText(Lang.text("status.success.launching"));
                 }
                 break;
             }
@@ -534,13 +536,14 @@ final class JavaFxUpdateView implements UpdateView {
                 UpdateSummary s = state.getSummary();
                 boolean safeSkipFailure = isSafeSkipFailure(em);
                 lblStatus.setText(safeSkipFailure
-                        ? "Couldn’t skip update safely"
-                        : "Update failed");
+                        ? Lang.text("status.error.skipUnsafe")
+                        : Lang.text("status.error.failed"));
                 if (em != null && !em.isEmpty()) {
-                    lblDescription.setText(safeSkipFailure
-                            ? safeSkipFailureDescription(em) : em);
+                    // Controller-owned diagnostic text stays in its original language.
+                    lblDescription.setText(em);
                 } else if (s != null && s.getFailedFiles() > 0) {
-                    lblDescription.setText(s.getFailedFiles() + " file(s) failed to update.");
+                    lblDescription.setText(Lang.text("status.error.failedFiles",
+                            formatFiles(s.getFailedFiles())));
                 } else {
                     lblDescription.setText("");
                 }
@@ -637,15 +640,15 @@ final class JavaFxUpdateView implements UpdateView {
             // DOWNLOADING phase: it is optional GUI infrastructure being prepared
             // before the real update (2B), so it must not shift the phase art.
             setPhase(UpdatePhase.PREPARING);
-            lblStatus.setText("Preparing JavaFX UI runtime…");
-            lblDescription.setText("Downloading JavaFX runtime");
+            lblStatus.setText(Lang.text("status.runtime.preparing"));
+            lblDescription.setText(Lang.text("status.runtime.downloading"));
             showStatusImage(IMG_PREPARING);
         } else if (isUpdaterDownload(state)) {
             // The updater self-update never exposes "agent" jargon in the normal
             // UI — it stays a sub-state of PREPARING with its own illustration.
             setPhase(UpdatePhase.PREPARING);
-            lblStatus.setText("Updating updater…");
-            lblDescription.setText("Preparing update components");
+            lblStatus.setText(Lang.text("status.updater.updating"));
+            lblDescription.setText(Lang.text("status.updater.preparing"));
             showStatusImage(IMG_UPDATER);
         } else if (phase != UpdatePhase.DOWNLOADING) {
             // Defensive: the reducer normally carries the DOWNLOADING phase.
@@ -710,8 +713,8 @@ final class JavaFxUpdateView implements UpdateView {
         List<String> urls = state.getServerUrls();
         String current = state.getCurrentServer();
         lblServer.setText(urls.size() <= 1
-                ? "Server: " + current
-                : "Servers (" + urls.size() + "): " + current);
+                ? Lang.text("details.server.single", current)
+                : Lang.text("details.server.multiple", urls.size(), current));
     }
 
     /**
@@ -1204,7 +1207,7 @@ final class JavaFxUpdateView implements UpdateView {
 
     /** Natural plural for a file count, e.g. 1 → "1 file", 3 → "3 files". */
     private static String formatFiles(int n) {
-        return formatCount(n) + (n == 1 ? " file" : " files");
+        return Lang.text(n == 1 ? "files.one" : "files.other", formatCount(n));
     }
 
     /** Render a download speed, e.g. 1.2 MB/s (matches me's FormatUtil). */
@@ -1379,7 +1382,7 @@ final class JavaFxUpdateView implements UpdateView {
      */
     Alert createQuitAlert() {
         Alert alert = new Alert(Alert.AlertType.NONE);
-        alert.setTitle("Quit update?");
+        alert.setTitle(Lang.text("quit.title"));
         // Frameless dialog: same TRANSPARENT stage style as the main window.
         alert.initStyle(WINDOW_STYLE);
         // A TRANSPARENT stage only makes the window compositor transparent — the
@@ -1398,15 +1401,15 @@ final class JavaFxUpdateView implements UpdateView {
             }
         });
         alert.setHeaderText(null);
-        Label header = new Label("Quit update?");
+        Label header = new Label(Lang.text("quit.title"));
         header.getStyleClass().add("dialog-header");
         alert.getDialogPane().setHeader(header);
-        alert.getDialogPane().setContent(dialogContentWithIllustration(dialogMessage(
-                "Skipping will restore files changed during this update and verify "
-                + "the last trusted version. Keep this window open; Minecraft will start only "
-                + "if verification succeeds."), IMG_POPUP));
-        ButtonType stay = new ButtonType("Keep updating", ButtonBar.ButtonData.OK_DONE);
-        quitSkipType = new ButtonType("Skip update", ButtonBar.ButtonData.OTHER);
+        alert.getDialogPane().setContent(dialogContentWithIllustration(
+                dialogMessage(Lang.text("quit.message")), IMG_POPUP));
+        ButtonType stay = new ButtonType(Lang.text("quit.keepUpdating"),
+                ButtonBar.ButtonData.OK_DONE);
+        quitSkipType = new ButtonType(Lang.text("quit.skipUpdate"),
+                ButtonBar.ButtonData.OTHER);
         alert.getButtonTypes().setAll(stay, quitSkipType);
         alert.initOwner(stage);
         if (stylesheet != null) {
@@ -1432,11 +1435,11 @@ final class JavaFxUpdateView implements UpdateView {
      */
     Alert createHelpAlert(UpdateUiState state) {
         Alert alert = new Alert(Alert.AlertType.NONE);
-        alert.setTitle("Troubleshooting");
+        alert.setTitle(Lang.text("help.title"));
         alert.initStyle(WINDOW_STYLE);
         makeDialogSceneTransparent(alert);
         alert.setHeaderText(null);
-        Label header = new Label("Troubleshooting");
+        Label header = new Label(Lang.text("help.title"));
         header.getStyleClass().add("dialog-header");
         alert.getDialogPane().setHeader(header);
 
@@ -1451,7 +1454,8 @@ final class JavaFxUpdateView implements UpdateView {
         }
         alert.getDialogPane().setContent(dialogContentWithIllustration(suggestions, IMG_TROUBLE));
 
-        ButtonType close = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
+        ButtonType close = new ButtonType(Lang.text("action.close"),
+                ButtonBar.ButtonData.CANCEL_CLOSE);
         alert.getButtonTypes().setAll(close);
         alert.initOwner(stage);
         if (stylesheet != null) {
@@ -1491,20 +1495,22 @@ final class JavaFxUpdateView implements UpdateView {
     /** Build the recoverable fatal-error decision dialog. */
     Alert createRecoveryAlert(UpdateUiState state) {
         Alert alert = new Alert(Alert.AlertType.NONE);
-        alert.setTitle("Update failed");
+        alert.setTitle(Lang.text("recovery.title"));
         alert.initStyle(WINDOW_STYLE);
         makeDialogSceneTransparent(alert);
         alert.setHeaderText(null);
-        Label header = new Label("Update failed");
+        Label header = new Label(Lang.text("recovery.title"));
         header.getStyleClass().add("dialog-header");
         alert.getDialogPane().setHeader(header);
-        alert.getDialogPane().setContent(dialogContentWithIllustration(dialogMessage(
-                displayOrDefault(state.getErrorMessage(), "The update could not be completed.")
-                + "\n\nYou can exit, or try the last trusted version. Minecraft starts only "
-                + "after its signed manifest and every local resource are verified."), IMG_POPUP));
+        String upstreamError = displayOrDefault(state.getErrorMessage(),
+                Lang.text("recovery.defaultError"));
+        alert.getDialogPane().setContent(dialogContentWithIllustration(
+                dialogMessage(Lang.text("recovery.message", upstreamError)), IMG_POPUP));
 
-        recoveryTrustedType = new ButtonType("Use trusted version", ButtonBar.ButtonData.OK_DONE);
-        ButtonType exit = new ButtonType("Exit", ButtonBar.ButtonData.CANCEL_CLOSE);
+        recoveryTrustedType = new ButtonType(Lang.text("recovery.useTrusted"),
+                ButtonBar.ButtonData.OK_DONE);
+        ButtonType exit = new ButtonType(Lang.text("recovery.exit"),
+                ButtonBar.ButtonData.CANCEL_CLOSE);
         alert.getButtonTypes().setAll(recoveryTrustedType, exit);
         alert.initOwner(stage);
         if (stylesheet != null) {
@@ -1590,18 +1596,10 @@ final class JavaFxUpdateView implements UpdateView {
         return message != null && message.startsWith("Unable to skip the update safely");
     }
 
-    private static String safeSkipFailureDescription(String message) {
-        int separator = message.indexOf(": ");
-        String reason = separator >= 0 ? message.substring(separator + 2) : "";
-        return reason.isEmpty()
-                ? "Minecraft was not started because trusted resources could not be verified."
-                : "Minecraft was not started. " + reason;
-    }
-
     // ── Construction ──────────────────────────────────────────────
 
     private void initUI(String gameDir) {
-        stage.setTitle("Minecraft Update Check");
+        stage.setTitle(Lang.text("window.title"));
         // Frameless window: no system title bar. The window keeps the title for
         // the taskbar / accessibility, but the visible chrome is the custom
         // title bar below. TRANSPARENT (not UNDECORATED) so the rounded dialog
@@ -1685,7 +1683,7 @@ final class JavaFxUpdateView implements UpdateView {
         // Details area: Server URL, Game Directory and the full log. Collapsed
         // in normal mode, expanded in debug mode (and on error).
         detailsPane.getStyleClass().add("details-pane");
-        lblGameDir.setText("Game dir: " + gameDir);
+        lblGameDir.setText(Lang.text("details.gameDirectory", gameDir));
         logArea.getStyleClass().add("log");
         logArea.setEditable(false);
         logArea.setWrapText(false);
@@ -1851,4 +1849,3 @@ final class JavaFxUpdateView implements UpdateView {
         return screen.getVisualBounds();
     }
 }
-

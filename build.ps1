@@ -155,6 +155,22 @@ if ($testFiles.Count -gt 0) {
 Copy-Item -Path (Join-Path $classesDir "*") -Destination $stageDir -Recurse
 Copy-Item -LiteralPath (Join-Path $resourceDir "ui.css") -Destination $stageDir
 Copy-Item -LiteralPath (Join-Path $resourceDir "images") -Destination $stageDir -Recurse
+$languageFiles = @("messages.properties", "messages_zh_CN.properties",
+        "messages_zh_TW.properties")
+$baseLanguageKeys = @()
+foreach ($languageFile in $languageFiles) {
+    $languagePath = Join-Path $resourceDir "lang/$languageFile"
+    $languageKeys = @(Get-Content -LiteralPath $languagePath |
+            Where-Object { $_ -match '^[^#!\s][^=]*=' } |
+            ForEach-Object { ($_ -split '=', 2)[0] } |
+            Sort-Object)
+    if ($baseLanguageKeys.Count -eq 0) {
+        $baseLanguageKeys = $languageKeys
+    } elseif (Compare-Object $baseLanguageKeys $languageKeys) {
+        throw "Language bundle keys do not match: $languageFile"
+    }
+}
+Copy-Item -LiteralPath (Join-Path $resourceDir "lang") -Destination $stageDir -Recurse
 Copy-Item -LiteralPath (Join-Path $metadataDir "mc-update-gui.properties") `
         -Destination (Join-Path $stageDir "META-INF/mc-update-gui.properties")
 Copy-Item -LiteralPath (Join-Path $projectRoot "LICENSE") `
@@ -213,6 +229,9 @@ $requiredEntries = @(
     "com/fireflytornado/mcupdate/javafx/JavaFxPresetFactory.class",
     "com/fireflytornado/mcupdate/javafx/JavaFxPresetEntrypoint.class",
     "ui.css",
+    "lang/messages.properties",
+    "lang/messages_zh_CN.properties",
+    "lang/messages_zh_TW.properties",
     "images/preparing.png",
     "runtime/javafx-base-$JavaFxVersion-$Classifier.jar",
     "runtime/javafx-graphics-$JavaFxVersion-$Classifier.jar",

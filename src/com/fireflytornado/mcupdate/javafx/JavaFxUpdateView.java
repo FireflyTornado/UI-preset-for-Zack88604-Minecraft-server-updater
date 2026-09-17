@@ -487,12 +487,16 @@ final class JavaFxUpdateView implements UpdateView {
                 }
                 if (counts != null) {
                     lblStatus.setText(Lang.text("status.checking"));
-                    lblDescription.setText(Lang.text("status.checking.description",
-                            formatCount(counts[0]), formatCount(counts[1])));
+                    String countKey = state.getStatus().startsWith("Rejected unsafe path:")
+                            ? "status.checking.rejectedDescription"
+                            : "status.checking.description";
+                    lblDescription.setText(Lang.text(countKey, formatCount(counts[0]),
+                            formatCount(counts[1])));
                 } else {
-                    lblStatus.setText(displayOrDefault(state.getStatus(),
+                    lblStatus.setText(displayOrDefault(UpstreamText.status(state.getStatus()),
                             Lang.text("status.checking")));
-                    lblDescription.setText(displayOrDefault(state.getDescription(), ""));
+                    lblDescription.setText(displayOrDefault(
+                            UpstreamText.description(state.getDescription()), ""));
                 }
                 break;
             }
@@ -512,10 +516,9 @@ final class JavaFxUpdateView implements UpdateView {
             }
             case CLEANING:
                 lblStatus.setText(Lang.text("status.cleaning"));
-                lblDescription.setText(state.getDescription() == null
-                        || state.getDescription().isEmpty()
-                        ? Lang.text("status.cleaning.description")
-                        : state.getDescription());
+                lblDescription.setText(displayOrDefault(
+                        UpstreamText.description(state.getDescription()),
+                        Lang.text("status.cleaning.description")));
                 break;
             case SUCCESS: {
                 UpdateSummary s = state.getSummary();
@@ -539,8 +542,7 @@ final class JavaFxUpdateView implements UpdateView {
                         ? Lang.text("status.error.skipUnsafe")
                         : Lang.text("status.error.failed"));
                 if (em != null && !em.isEmpty()) {
-                    // Controller-owned diagnostic text stays in its original language.
-                    lblDescription.setText(em);
+                    lblDescription.setText(UpstreamText.error(em, state.getErrorCode()));
                 } else if (s != null && s.getFailedFiles() > 0) {
                     lblDescription.setText(Lang.text("status.error.failedFiles",
                             formatFiles(s.getFailedFiles())));
@@ -1502,8 +1504,9 @@ final class JavaFxUpdateView implements UpdateView {
         Label header = new Label(Lang.text("recovery.title"));
         header.getStyleClass().add("dialog-header");
         alert.getDialogPane().setHeader(header);
-        String upstreamError = displayOrDefault(state.getErrorMessage(),
-                Lang.text("recovery.defaultError"));
+        String upstreamError = state.getErrorMessage() == null || state.getErrorMessage().isEmpty()
+                ? Lang.text("recovery.defaultError")
+                : UpstreamText.error(state.getErrorMessage(), state.getErrorCode());
         alert.getDialogPane().setContent(dialogContentWithIllustration(
                 dialogMessage(Lang.text("recovery.message", upstreamError)), IMG_POPUP));
 

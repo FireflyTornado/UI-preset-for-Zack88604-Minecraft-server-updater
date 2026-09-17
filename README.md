@@ -41,7 +41,7 @@ the build script before they are compiled or packaged.
 The final release artifact is written to:
 
 ```text
-dist/fireflytornado-javafx-preset-1.0.1-win.jar
+dist/fireflytornado-javafx-preset-1.1.1-win.jar
 ```
 
 ## Installation

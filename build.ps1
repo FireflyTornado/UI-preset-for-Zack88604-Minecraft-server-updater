@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Version = "1.0.1",
+    [string]$Version = "1.1.1",
     [string]$JavaFxVersion = "21.0.4",
     [string]$Classifier = "win"
 )
@@ -160,7 +160,10 @@ $languageFiles = @("messages.properties", "messages_zh_CN.properties",
 $baseLanguageKeys = @()
 foreach ($languageFile in $languageFiles) {
     $languagePath = Join-Path $resourceDir "lang/$languageFile"
-    $languageKeys = @(Get-Content -LiteralPath $languagePath |
+    # Windows PowerShell 5.1 otherwise decodes BOM-less UTF-8 property files
+    # with the active ANSI code page. Some resulting control characters are
+    # treated as line breaks, making valid Chinese bundles appear to lose keys.
+    $languageKeys = @(Get-Content -LiteralPath $languagePath -Encoding UTF8 |
             Where-Object { $_ -match '^[^#!\s][^=]*=' } |
             ForEach-Object { ($_ -split '=', 2)[0] } |
             Sort-Object)

@@ -35,7 +35,7 @@ OpenJFX 依赖缓存在本项目的 `lib/javafx/`；缺失时会自动从 Maven 
 最终发布产物保留在：
 
 ```text
-dist/fireflytornado-javafx-preset-1.0.1-win.jar
+dist/fireflytornado-javafx-preset-1.1.1-win.jar
 ```
 
 ## 安装

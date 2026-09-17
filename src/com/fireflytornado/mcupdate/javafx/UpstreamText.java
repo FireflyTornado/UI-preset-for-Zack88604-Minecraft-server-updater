@@ -8,9 +8,11 @@ import java.util.Map;
 final class UpstreamText {
 
     private static final String UPDATE_ERROR_PREFIX = "Update error: ";
-    private static final String SKIP_ERROR_PREFIX =
+    // Controller prefixes are parsing tokens only. They are stripped before
+    // presentation so outcome text is not repeated around the localized cause.
+    private static final String LEGACY_SKIP_ERROR_PREFIX =
             "Unable to skip the update safely; Minecraft will not start: ";
-    private static final String SKIP_ERROR_PREFIX_CURRENT =
+    private static final String CURRENT_SKIP_ERROR_PREFIX =
             "Unable to skip the update safely: ";
 
     private static final Map<String, String> EXACT_STATUS_KEYS = Map.ofEntries(
@@ -134,16 +136,13 @@ final class UpstreamText {
             return value;
         }
         if (value.startsWith(UPDATE_ERROR_PREFIX)) {
-            return Lang.text("upstream.error.update",
-                    cause(value.substring(UPDATE_ERROR_PREFIX.length()), errorCode));
+            return cause(value.substring(UPDATE_ERROR_PREFIX.length()), errorCode);
         }
-        if (value.startsWith(SKIP_ERROR_PREFIX)) {
-            return Lang.text("upstream.error.skip",
-                    cause(value.substring(SKIP_ERROR_PREFIX.length()), errorCode));
+        if (value.startsWith(LEGACY_SKIP_ERROR_PREFIX)) {
+            return cause(value.substring(LEGACY_SKIP_ERROR_PREFIX.length()), errorCode);
         }
-        if (value.startsWith(SKIP_ERROR_PREFIX_CURRENT)) {
-            return Lang.text("upstream.error.skip",
-                    cause(value.substring(SKIP_ERROR_PREFIX_CURRENT.length()), errorCode));
+        if (value.startsWith(CURRENT_SKIP_ERROR_PREFIX)) {
+            return cause(value.substring(CURRENT_SKIP_ERROR_PREFIX.length()), errorCode);
         }
         return cause(value, errorCode);
     }

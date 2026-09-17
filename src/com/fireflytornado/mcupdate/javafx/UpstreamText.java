@@ -10,6 +10,8 @@ final class UpstreamText {
     private static final String UPDATE_ERROR_PREFIX = "Update error: ";
     private static final String SKIP_ERROR_PREFIX =
             "Unable to skip the update safely; Minecraft will not start: ";
+    private static final String SKIP_ERROR_PREFIX_CURRENT =
+            "Unable to skip the update safely: ";
 
     private static final Map<String, String> EXACT_STATUS_KEYS = Map.ofEntries(
             Map.entry("Preparing update...", "status.preparing"),
@@ -20,6 +22,8 @@ final class UpstreamText {
             Map.entry("Verifying cached resources...", "upstream.status.verifyingCached"),
             Map.entry("Verifying local files against cached manifest...",
                     "upstream.status.verifyingLocal"),
+            Map.entry("Safely skipping update…", "upstream.status.stopping"),
+            Map.entry("Restoring changed files…", "upstream.status.restoring"),
             Map.entry("Downloading agent update...", "status.updater.updating"),
             Map.entry("Update failed", "status.error.failed"),
             Map.entry("Already up to date, launching Minecraft...", "status.success.current")
@@ -27,6 +31,10 @@ final class UpstreamText {
 
     private static final Map<String, String> EXACT_DESCRIPTION_KEYS = Map.of(
             "Removing files that are no longer needed", "status.cleaning.description",
+            "Waiting for the current operation to stop",
+                    "upstream.description.waitingForStop",
+            "Preparing the last trusted version",
+                    "upstream.description.preparingTrusted",
             "Minecraft starts only when the signed cache matches local files",
                     "upstream.description.signedCacheRequired"
     );
@@ -62,6 +70,20 @@ final class UpstreamText {
             Map.entry("Invalid signed manifest signature",
                     "upstream.error.manifest.invalidSignatureEncoding"),
             Map.entry("Cannot hash signed manifest", "upstream.error.manifest.hash"),
+            Map.entry("Update server returned an invalid Ed25519 public-key descriptor",
+                    "upstream.error.trust.invalidDescriptor"),
+            Map.entry("The server Ed25519 public key was not accepted; Minecraft will not start",
+                    "upstream.error.trust.rejected"),
+            Map.entry("Cannot calculate server public-key fingerprint",
+                    "upstream.error.trust.fingerprint"),
+            Map.entry("Cannot confirm a first-use public key in a headless environment",
+                    "upstream.error.trust.noPrompt"),
+            Map.entry("Unable to show server-key confirmation",
+                    "upstream.error.trust.noPrompt"),
+            Map.entry("A manifest public key already exists; refusing to replace it",
+                    "upstream.error.trust.existingKey"),
+            Map.entry("Unable to create game configuration directory",
+                    "upstream.error.trust.save"),
             Map.entry("Cached signed manifest does not contain a file list",
                     "upstream.error.cache.noFileList"),
             Map.entry("Cannot cache an incomplete signed manifest",
@@ -118,6 +140,10 @@ final class UpstreamText {
         if (value.startsWith(SKIP_ERROR_PREFIX)) {
             return Lang.text("upstream.error.skip",
                     cause(value.substring(SKIP_ERROR_PREFIX.length()), errorCode));
+        }
+        if (value.startsWith(SKIP_ERROR_PREFIX_CURRENT)) {
+            return Lang.text("upstream.error.skip",
+                    cause(value.substring(SKIP_ERROR_PREFIX_CURRENT.length()), errorCode));
         }
         return cause(value, errorCode);
     }

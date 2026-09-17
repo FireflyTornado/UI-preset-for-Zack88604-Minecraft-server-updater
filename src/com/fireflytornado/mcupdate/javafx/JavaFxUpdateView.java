@@ -113,6 +113,8 @@ final class JavaFxUpdateView implements UpdateView {
     // Reserved status-illustration slot: the display size the ImageViews fit
     // the (possibly 128×128+) transparent PNG sources down to.
     private static final double STATUS_IMAGE_SIZE = 64;
+    /** Width used to measure and wrap the troubleshooting suggestion column. */
+    private static final double HELP_SUGGESTIONS_WIDTH = 360;
 
     // Round-3 micro-animation timings (视觉精修第三步要求.md §2). The ~200ms
     // image cross-fade is the only "real" animation; the SUCCESS/ERROR scale-in
@@ -1447,11 +1449,21 @@ final class JavaFxUpdateView implements UpdateView {
 
         VBox suggestions = new VBox(8);
         suggestions.getStyleClass().add("help-suggestions");
+        // Give wrapped labels a stable measurement width before the Alert asks
+        // for its preferred height. Without this, the HBox first measures the
+        // text wider than the dialog can provide, then compresses it to one
+        // line of height and Label renders the remaining Chinese text as an
+        // ellipsis instead of growing vertically.
+        suggestions.setMinWidth(HELP_SUGGESTIONS_WIDTH);
+        suggestions.setPrefWidth(HELP_SUGGESTIONS_WIDTH);
+        suggestions.setMaxWidth(HELP_SUGGESTIONS_WIDTH);
         int number = 1;
         for (String hint : ErrorHintResolver.resolve(state)) {
             Label item = new Label(number++ + ".  " + hint);
             item.setWrapText(true);
-            item.setMaxWidth(360);
+            item.setPrefWidth(HELP_SUGGESTIONS_WIDTH);
+            item.setMaxWidth(HELP_SUGGESTIONS_WIDTH);
+            item.setMinHeight(Region.USE_PREF_SIZE);
             suggestions.getChildren().add(item);
         }
         alert.getDialogPane().setContent(dialogContentWithIllustration(suggestions, IMG_TROUBLE));

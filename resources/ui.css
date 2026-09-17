@@ -573,7 +573,10 @@
 }
 
 .help-dialog {
-    -fx-pref-width: 410px;
+    /* 360px text + 64px illustration + 16px gap + dialog insets. Keeping the
+       preferred width in sync with createHelpAlert prevents wrapped CJK text
+       from being measured wide and then vertically compressed into ellipsis. */
+    -fx-pref-width: 500px;
 }
 
 .help-dialog .help-suggestions .label {
@@ -589,5 +592,4 @@
 .dialog-pane > .button-bar .container {
     -fx-padding: 0;
 }
-
 

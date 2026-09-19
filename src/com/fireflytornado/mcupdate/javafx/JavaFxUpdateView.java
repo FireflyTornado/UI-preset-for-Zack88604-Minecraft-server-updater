@@ -9,13 +9,9 @@ import com.zack88604.autoupdater.gui.api.UpdateView;
 import javafx.animation.Animation;
 import javafx.animation.AnimationTimer;
 import javafx.animation.FadeTransition;
-import javafx.animation.Interpolator;
-import javafx.animation.KeyFrame;
-import javafx.animation.KeyValue;
 import javafx.animation.ParallelTransition;
 import javafx.animation.PauseTransition;
 import javafx.animation.ScaleTransition;
-import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.geometry.Insets;
@@ -124,11 +120,11 @@ final class JavaFxUpdateView implements UpdateView {
     private static final double HEADER_FADE_MS = 130;
     private static final double ENTRANCE_SCALE_FROM = 0.94;
 
-    // Progress motion is deliberately short: every new real snapshot interrupts
-    // the existing keyframes and retargets from the value currently on screen.
-    // The two Timeline instances are created once and reused for the lifetime of
-    // the view, so high-frequency render calls cannot build an animation queue.
-    private static final double PROGRESS_TWEEN_MS = 240;
+    // Progress follows the newest target continuously instead of restarting a
+    // Timeline for every snapshot. At 20/s this factor converges to the latest
+    // value in roughly the same time as the former 240ms tween without repeated
+    // keyframe churn or an animation that is perpetually restarted.
+    private static final double PROGRESS_FOLLOW_PER_SECOND = 20.0;
     private static final double OVERALL_SHIMMER_SWEEP_MS = 1500;
     private static final double OVERALL_SHIMMER_PAUSE_MS = 1050;
     private static final double FILE_SHIMMER_SWEEP_MS = 880;
@@ -225,10 +221,12 @@ final class JavaFxUpdateView implements UpdateView {
     private final Label lblDlSpeed = new Label("");
     private final DownloadSpeedSampler downloadSpeedSampler = new DownloadSpeedSampler();
 
-    // One reusable interpolation Timeline per bar. They are stopped on every
-    // retarget, reset, file switch and terminal transition.
-    private final Timeline overallProgressTween = new Timeline();
-    private final Timeline fileProgressTween = new Timeline();
+    // One pulse-driven follower per bar. New snapshots only replace the target;
+    // they never enqueue or restart animations.
+    private final ProgressFollower overallProgressTween =
+            new ProgressFollower(overallBar);
+    private final ProgressFollower fileProgressTween =
+            new ProgressFollower(dlBar);
     private boolean overallProgressInitialized;
     private boolean fileProgressInitialized;
     private double lastOverallTarget = Double.NaN;
@@ -287,6 +285,9 @@ final class JavaFxUpdateView implements UpdateView {
     private final Button btnErrorHelp = new Button(Lang.text("action.getHelp"));
     private UpdateUiState errorState;
     private boolean recoveryDecisionPending;
+    /** Local acknowledgement shown immediately after an in-progress skip. */
+    private boolean stopRequestedLocally;
+    private UpdatePhase stopRequestedFromPhase;
 
     // Persistent bottom copyright line (always the last row of the root).
     private final Label lblFooter = new Label();
@@ -368,6 +369,9 @@ final class JavaFxUpdateView implements UpdateView {
      *  {@code stage.close()} (v2.1 §11: a must-handle close-lifecycle detail). */
     private boolean closing;
 
+    /** Ensures the initial PREPARING visual is applied exactly once. */
+    private boolean phaseVisualInitialized;
+
     private UpdatePhase phase = UpdatePhase.PREPARING;
 
     JavaFxUpdateView(JavaFxViewListener listener, boolean debug, String gameDir) {
@@ -428,6 +432,22 @@ final class JavaFxUpdateView implements UpdateView {
     @Override
     public void render(UpdateUiState state) {
         currentState = Objects.requireNonNull(state, "state");
+        if (stopRequestedLocally) {
+            if (state.getPhase() == UpdatePhase.SUCCESS
+                    || state.getPhase() == UpdatePhase.ERROR) {
+                clearLocalStopRequest();
+            } else if (state.getPhase() == stopRequestedFromPhase) {
+                // The controller can emit one or more stale progress snapshots
+                // while its worker is unwinding. Keep the immediate local
+                // acknowledgement visible, but continue refreshing diagnostics.
+                applyServer(state);
+                applyLog(state);
+                return;
+            }
+            // A different non-terminal phase is authoritative (for example,
+            // rollback/cache verification). Render it while keeping further
+            // close requests disabled until the controller finishes.
+        }
         if (state.getClosePolicy() != ClosePolicy.SKIP_OR_EXIT) {
             recoveryDecisionPending = false;
         }
@@ -601,7 +621,7 @@ final class JavaFxUpdateView implements UpdateView {
                 && target >= lastOverallTarget;
         boolean targetChanged = Double.isNaN(lastOverallTarget)
                 || Math.abs(target - lastOverallTarget) >= 0.0001;
-        if (targetChanged || overallProgressTween.getStatus() != Animation.Status.RUNNING) {
+        if (targetChanged || !overallProgressTween.isRunning()) {
             setProgressTarget(overallBar, overallProgressTween, target, animate);
         }
         overallProgressInitialized = true;
@@ -635,8 +655,6 @@ final class JavaFxUpdateView implements UpdateView {
                 downloadSpeedSampler.reset();
             }
             hideDownloadArea();
-            updateStatusImage(phase);
-            applyWindowHeight();
             return;
         }
         if (isGuiRuntimeDownload(state)) {
@@ -686,7 +704,7 @@ final class JavaFxUpdateView implements UpdateView {
                     && target >= lastFileTarget;
             boolean targetChanged = Double.isNaN(lastFileTarget)
                     || Math.abs(target - lastFileTarget) >= 0.0001;
-            if (targetChanged || fileProgressTween.getStatus() != Animation.Status.RUNNING) {
+            if (targetChanged || !fileProgressTween.isRunning()) {
                 setProgressTarget(dlBar, fileProgressTween, target, animate);
             }
             fileProgressInitialized = true;
@@ -764,9 +782,10 @@ final class JavaFxUpdateView implements UpdateView {
      * visuals from them. The mid-flow phases carry neither class.
      */
     private void setPhase(UpdatePhase p) {
-        if (phase != p) {
+        if (!phaseVisualInitialized || phase != p) {
             UpdatePhase previous = phase;
             phase = p;
+            phaseVisualInitialized = true;
             animateHeaderFade();
             root.getStyleClass().removeAll("success-state", "error-state");
             if (p != UpdatePhase.DOWNLOADING) {
@@ -817,13 +836,12 @@ final class JavaFxUpdateView implements UpdateView {
                 root.getStyleClass().add("error-state");
                 break;
             }
+            // Phase transitions are the only normal renders that can change the
+            // content structure. Byte-only progress ticks must not enqueue CSS
+            // measurement/layout work on every frame.
+            updateStatusImage(p);
+            applyWindowHeight();
         }
-        // Update the status illustration for the phase, then keep the window
-        // sized to its content. This runs even when the phase is re-asserted
-        // unchanged: the view starts in PREPARING, so the first PREPARING render
-        // would otherwise short-circuit and its illustration would never appear.
-        updateStatusImage(p);
-        applyWindowHeight();
     }
 
     /** Hide the overall percentage label, clearing any stale text. */
@@ -858,20 +876,9 @@ final class JavaFxUpdateView implements UpdateView {
         lblDlSpeed.setText("");
     }
 
-    private void setProgressTarget(ProgressBar bar, Timeline tween,
+    private void setProgressTarget(ProgressBar bar, ProgressFollower tween,
                                    double target, boolean animate) {
-        double safeTarget = clampProgress(target);
-        double current = clampProgress(bar.getProgress());
-        stopProgressTween(tween);
-        if (!animate || Math.abs(safeTarget - current) < 0.001) {
-            setProgressDirect(bar, safeTarget);
-            return;
-        }
-        tween.getKeyFrames().setAll(
-                new KeyFrame(Duration.ZERO, new KeyValue(bar.progressProperty(), current)),
-                new KeyFrame(Duration.millis(PROGRESS_TWEEN_MS),
-                        new KeyValue(bar.progressProperty(), safeTarget, Interpolator.EASE_OUT)));
-        tween.playFromStart();
+        tween.setTarget(target, animate);
     }
 
     private static void setProgressDirect(ProgressBar bar, double value) {
@@ -886,14 +893,78 @@ final class JavaFxUpdateView implements UpdateView {
         return Math.round(clampProgress(progress) * 100.0) + "%";
     }
 
-    private static void stopProgressTween(Timeline tween) {
+    private static void stopProgressTween(ProgressFollower tween) {
         tween.stop();
-        tween.getKeyFrames().clear();
     }
 
     private void stopProgressAnimations() {
         stopProgressTween(overallProgressTween);
         stopProgressTween(fileProgressTween);
+    }
+
+    /**
+     * Smoothly follows a replaceable target on JavaFX pulses. Unlike a Timeline,
+     * updating the target does not restart the animation, so frequent progress
+     * snapshots cannot keep pushing completion into the future.
+     */
+    private static final class ProgressFollower extends AnimationTimer {
+        private final ProgressBar bar;
+        private double target;
+        private long lastPulseNanos;
+        private boolean running;
+
+        private ProgressFollower(ProgressBar bar) {
+            this.bar = bar;
+        }
+
+        private void setTarget(double value, boolean animate) {
+            target = clampProgress(value);
+            double current = clampProgress(bar.getProgress());
+            if (!animate || Math.abs(target - current) < 0.001) {
+                stop();
+                setProgressDirect(bar, target);
+                return;
+            }
+            if (!running) {
+                running = true;
+                lastPulseNanos = 0L;
+                super.start();
+            }
+        }
+
+        @Override
+        public void handle(long now) {
+            if (lastPulseNanos == 0L) {
+                lastPulseNanos = now;
+                return;
+            }
+            double elapsedSeconds = Math.min(0.1,
+                    (now - lastPulseNanos) / 1_000_000_000.0);
+            lastPulseNanos = now;
+            double current = clampProgress(bar.getProgress());
+            double difference = target - current;
+            if (Math.abs(difference) < 0.001) {
+                setProgressDirect(bar, target);
+                stop();
+                return;
+            }
+            double fraction = Math.min(1.0,
+                    elapsedSeconds * PROGRESS_FOLLOW_PER_SECOND);
+            setProgressDirect(bar, current + difference * fraction);
+        }
+
+        @Override
+        public void stop() {
+            if (running) {
+                super.stop();
+            }
+            running = false;
+            lastPulseNanos = 0L;
+        }
+
+        private boolean isRunning() {
+            return running;
+        }
     }
 
     private void clearRememberedProgress() {
@@ -1239,6 +1310,10 @@ final class JavaFxUpdateView implements UpdateView {
             // let it proceed, but don't re-report it as a user action.
             return;
         }
+        if (stopRequestedLocally) {
+            event.consume();
+            return;
+        }
         ClosePolicy policy = currentState.getClosePolicy();
         if (policy == ClosePolicy.CONFIRM) {
             event.consume();
@@ -1317,6 +1392,7 @@ final class JavaFxUpdateView implements UpdateView {
         Optional<ButtonType> choice = alert.showAndWait();
         hideQuitOverlay();
         if (choice.isPresent() && choice.get() == quitSkipType) {
+            showLocalStoppingState();
             listener.userRequestedClose();
             // Keep the view alive until the controller finishes rollback and
             // cached-manifest verification. It will close us on success or
@@ -1325,6 +1401,36 @@ final class JavaFxUpdateView implements UpdateView {
             // "Keep updating", or the dialog was dismissed — resume the update.
             listener.cancelCloseConfirmation();
         }
+    }
+
+    /**
+     * Acknowledge the destructive choice immediately while the controller waits
+     * for its current cooperative checkpoint. This is explicitly a pending UI
+     * state: it claims neither cancellation nor rollback has completed.
+     */
+    private void showLocalStoppingState() {
+        stopRequestedLocally = true;
+        stopRequestedFromPhase = currentState.getPhase();
+        btnWindowClose.setDisable(true);
+        btnClose.setDisable(true);
+        downloadWaitingTimer.stop();
+        stopProgressAnimations();
+        stopShimmer();
+        overallArea.setVisible(true);
+        overallBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
+        clearOverallPercent();
+        hideDownloadArea();
+        lblStatus.setText(Lang.text("upstream.status.stopping"));
+        lblDescription.setText(Lang.text("upstream.description.waitingForStop"));
+        showStatusImage(IMG_CHECKING);
+        applyWindowHeight();
+    }
+
+    /** Restore normal controls if the controller returns a terminal state. */
+    private void clearLocalStopRequest() {
+        stopRequestedLocally = false;
+        stopRequestedFromPhase = null;
+        btnWindowClose.setDisable(false);
     }
 
     // ── Quit-update dim overlay ──────────────────────────────────

@@ -220,6 +220,9 @@ final class JavaFxUpdateView implements UpdateView {
     private final Region dlShimmer = new Region();
     private final Label lblDlSpeed = new Label("");
     private final DownloadSpeedSampler downloadSpeedSampler = new DownloadSpeedSampler();
+    // Expire speed even when the core sends no new snapshots during a socket read.
+    private final PauseTransition downloadSpeedIdleTimer = new PauseTransition(Duration.seconds(2));
+    private DownloadProgress lastSpeedProgress = DownloadProgress.inactive();
 
     // One pulse-driven follower per bar. New snapshots only replace the target;
     // they never enqueue or restart animations.
@@ -233,15 +236,13 @@ final class JavaFxUpdateView implements UpdateView {
     private double lastFileTarget = Double.NaN;
     private String interpolatedFilePath;
 
-    // ERROR snapshots intentionally carry an inactive DownloadProgress. Keep the
-    // last real, non-zero values in the View so terminal rendering can preserve
-    // useful information without changing UpdateUiState or the reducer.
+    // Retain a fallback for older cores that clear DownloadProgress on ERROR.
+    // New cores supply an authoritative snapshot of the failed file, including 0%.
     private boolean hasMeaningfulOverallProgress;
     private double lastMeaningfulOverallProgress;
     private boolean hasMeaningfulFileProgress;
     private double lastMeaningfulFileProgress;
     private String lastMeaningfulFilePath;
-    private String lastMeaningfulFileSpeed;
 
     // A single pulse-driven shimmer clock animates both highlights. Unlike a
     // Timeline per render, it has a fixed allocation and is started/stopped only
@@ -380,6 +381,10 @@ final class JavaFxUpdateView implements UpdateView {
         this.stage = new Stage();
         java.net.URL css = getClass().getResource("/ui.css");
         this.stylesheet = css == null ? null : css.toExternalForm();
+        downloadSpeedIdleTimer.setOnFinished(event -> {
+            downloadSpeedSampler.reset();
+            lblDlSpeed.setText(formatSpeed(0));
+        });
         downloadWaitingTimer.setOnFinished(event -> {
             if (phase == UpdatePhase.DOWNLOADING && downloadWaitingPath != null) {
                 int choice = chooseDownloadWaitingVariant();
@@ -478,6 +483,7 @@ final class JavaFxUpdateView implements UpdateView {
         stopQuitOverlayFade();
         stopProgressAnimations();
         stopShimmer();
+        downloadSpeedIdleTimer.stop();
         downloadWaitingTimer.stop();
         stage.close();
     }
@@ -530,10 +536,10 @@ final class JavaFxUpdateView implements UpdateView {
                     filesSeen++;
                 }
                 lblStatus.setText(Lang.text("status.downloading"));
-                lblDescription.setText(filesTotal > 0
+                lblDescription.setText(displayOrDefault(UpstreamText.description(state.getDescription()), filesTotal > 0
                         ? Lang.text("status.downloading.known",
                                 formatCount(filesSeen), formatCount(filesTotal))
-                        : Lang.text("status.downloading.unknown", formatCount(filesSeen)));
+                        : Lang.text("status.downloading.unknown", formatCount(filesSeen))));
                 break;
             }
             case CLEANING:
@@ -635,9 +641,20 @@ final class JavaFxUpdateView implements UpdateView {
         DownloadProgress dl = state.getDownloadProgress();
         if (state.getPhase() == UpdatePhase.ERROR) {
             stopProgressTween(fileProgressTween);
-            if (hasMeaningfulFileProgress) {
+            downloadSpeedIdleTimer.stop();
+            downloadSpeedSampler.reset();
+            if (dl.isActive()) {
+                lblDlFile.setText(dl.getPath() == null ? "" : dl.getPath());
+                lblDlSpeed.setText(formatSpeed(0));
+                double target = dl.getTotalBytes() > 0
+                        ? clampProgress(dl.getDownloadedBytes() / (double) dl.getTotalBytes()) : 0;
+                setProgressDirect(dlBar, target);
+                fileProgressInitialized = true;
+                lastFileTarget = target;
+                showDownloadArea();
+            } else if (hasMeaningfulFileProgress) {
                 lblDlFile.setText(lastMeaningfulFilePath == null ? "" : lastMeaningfulFilePath);
-                lblDlSpeed.setText(lastMeaningfulFileSpeed == null ? "" : lastMeaningfulFileSpeed);
+                lblDlSpeed.setText(formatSpeed(0));
                 setProgressDirect(dlBar, lastMeaningfulFileProgress);
                 fileProgressInitialized = true;
                 lastFileTarget = lastMeaningfulFileProgress;
@@ -648,6 +665,8 @@ final class JavaFxUpdateView implements UpdateView {
             return;
         }
         if (!dl.isActive()) {
+            downloadSpeedIdleTimer.stop();
+            lastSpeedProgress = DownloadProgress.inactive();
             // DOWNLOADING briefly becomes inactive between managed files. Keep
             // the session sampler alive across that gap; terminal/other phases
             // really end the session and start the next download from zero.
@@ -676,7 +695,28 @@ final class JavaFxUpdateView implements UpdateView {
             // Defensive: the reducer normally carries the DOWNLOADING phase.
             setPhase(UpdatePhase.DOWNLOADING);
         }
+        boolean sameFile = lastSpeedProgress.isActive()
+                && java.util.Objects.equals(lastSpeedProgress.getPath(), dl.getPath())
+                && lastSpeedProgress.getKind() == dl.getKind();
+        if (sameFile && dl.getDownloadedBytes() < lastSpeedProgress.getDownloadedBytes()) {
+            downloadSpeedSampler.reset();
+        }
+        if (!sameFile || dl.getDownloadedBytes() != lastSpeedProgress.getDownloadedBytes()) {
+            downloadSpeedIdleTimer.playFromStart();
+        }
+        lastSpeedProgress = dl;
         String speedText = formatSpeed(downloadSpeedSampler.update(dl, System.nanoTime()));
+        String transferText = UpstreamText.description(state.getDescription());
+        if (transferText != null && state.getDescription() != null
+                && state.getDescription().startsWith("Transfer ")) {
+            lblDescription.setText(transferText);
+            if (!state.getDescription().equals("Transfer resuming")
+                    && !state.getDescription().equals("Transfer restarting")) {
+                downloadSpeedSampler.reset();
+                downloadSpeedIdleTimer.stop();
+                speedText = formatSpeed(0);
+            }
+        }
         lblDlFile.setText(dl.getPath() == null ? "" : dl.getPath());
         if (dl.getTotalBytes() > 0) {
             double target = clampProgress(dl.getDownloadedBytes() / (double) dl.getTotalBytes());
@@ -690,13 +730,11 @@ final class JavaFxUpdateView implements UpdateView {
                 // A new 0% file must not inherit the previous file's ERROR cache.
                 hasMeaningfulFileProgress = false;
                 lastMeaningfulFilePath = null;
-                lastMeaningfulFileSpeed = null;
             }
             if (target > 0.0) {
                 hasMeaningfulFileProgress = true;
                 lastMeaningfulFileProgress = target;
                 lastMeaningfulFilePath = dl.getPath();
-                lastMeaningfulFileSpeed = speedText;
             }
             boolean animate = phase == UpdatePhase.DOWNLOADING
                     && fileProgressInitialized
@@ -973,13 +1011,14 @@ final class JavaFxUpdateView implements UpdateView {
         hasMeaningfulFileProgress = false;
         lastMeaningfulFileProgress = 0.0;
         lastMeaningfulFilePath = null;
-        lastMeaningfulFileSpeed = null;
         interpolatedFilePath = null;
         lastOverallTarget = Double.NaN;
         lastFileTarget = Double.NaN;
         overallProgressInitialized = false;
         fileProgressInitialized = false;
         downloadSpeedSampler.reset();
+        downloadSpeedIdleTimer.stop();
+        lastSpeedProgress = DownloadProgress.inactive();
     }
 
     private void startShimmer() {
@@ -1290,6 +1329,7 @@ final class JavaFxUpdateView implements UpdateView {
         if (bytesPerSec < 0) {
             bytesPerSec = 0;
         }
+        if (bytesPerSec == 0) return "0 KB/s";
         if (bytesPerSec >= 1_000_000_000) return String.format("%.1f GB/s", bytesPerSec / 1_000_000_000);
         if (bytesPerSec >= 1_000_000)     return String.format("%.1f MB/s", bytesPerSec / 1_000_000);
         if (bytesPerSec >= 1_000)         return String.format("%.0f KB/s", bytesPerSec / 1_000);

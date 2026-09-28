@@ -3,9 +3,14 @@ package com.fireflytornado.mcupdate.javafx;
 import com.zack88604.autoupdater.gui.api.UpdateErrorCode;
 
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Localizes controller-owned text shown outside the verbatim Details log. */
 final class UpstreamText {
+
+    private static final Pattern DOWNLOAD_FAILURE = Pattern.compile(
+            "File download failed: (.*) \\(reason: (TIMEOUT|NETWORK|HTTP|INTEGRITY|LOCAL_IO); attempts: (\\d+)\\)");
 
     private static final String UPDATE_ERROR_PREFIX = "Update error: ";
     // Controller prefixes are parsing tokens only. They are stripped before
@@ -128,6 +133,15 @@ final class UpstreamText {
             return value;
         }
         String exactKey = EXACT_DESCRIPTION_KEYS.get(value);
+        if (value.startsWith("Transfer waiting: ")) {
+            return Lang.text("transfer.waiting", value.substring("Transfer waiting: ".length()));
+        }
+        if (value.startsWith("Transfer retrying: ")) {
+            return Lang.text("transfer.retrying", value.substring("Transfer retrying: ".length()));
+        }
+        if (value.equals("Transfer resuming")) return Lang.text("transfer.resuming");
+        if (value.equals("Transfer restarting")) return Lang.text("transfer.restarting");
+        if (value.equals("Transfer verifying")) return Lang.text("transfer.verifying");
         return exactKey == null ? null : Lang.text(exactKey);
     }
 
@@ -148,6 +162,14 @@ final class UpstreamText {
     }
 
     private static String cause(String value, UpdateErrorCode errorCode) {
+        Matcher downloadFailure = DOWNLOAD_FAILURE.matcher(value);
+        if (downloadFailure.matches()) {
+            return Lang.text("transfer.failed", downloadFailure.group(1),
+                    Lang.text("transfer.reason." + downloadFailure.group(2)), downloadFailure.group(3));
+        }
+        if (value.startsWith("File installation failed: ")) {
+            return Lang.text("transfer.installFailed", value.substring("File installation failed: ".length()));
+        }
         String exactKey = EXACT_ERROR_KEYS.get(value);
         if (exactKey != null) {
             return Lang.text(exactKey);

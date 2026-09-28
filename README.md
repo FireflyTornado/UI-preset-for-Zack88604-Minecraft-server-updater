@@ -13,6 +13,11 @@ and requires that project to load and run.
 ## Features
 
 - Runs JavaFX in a separate helper JVM without affecting the Minecraft process.
+- With the updated core, shows network waiting, retry, and verification
+  feedback above the progress bars; the speed indicator always shows a numeric speed.
+  Without new bytes for two seconds it shows 0 KB/s, even if no new state arrives.
+  Errors retain the failed file's actual progress and show zero speed.
+  New bytes restore the ordinary file counter subtitle; resume/restart details stay in the log.
 - Retains progress, speed, logs, status illustrations, animations, error guidance,
   and close-confirmation UI.
 - Supports upstream GUI protocol actions such as closing, skipping an update,
@@ -41,7 +46,7 @@ the build script before they are compiled or packaged.
 The final release artifact is written to:
 
 ```text
-dist/fireflytornado-javafx-preset-1.2.0-win.jar
+dist/fireflytornado-javafx-preset-1.2.1-win.jar
 ```
 
 ## Installation

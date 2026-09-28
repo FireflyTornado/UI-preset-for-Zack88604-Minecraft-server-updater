@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Version = "1.2.0",
+    [string]$Version = "1.2.1",
     [string]$JavaFxVersion = "21.0.4",
     [string]$Classifier = "win"
 )

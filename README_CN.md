@@ -14,7 +14,7 @@ JavaFX 窗口运行在独立 helper JVM 中，不会让 Minecraft JVM 加载 `ja
 - 独立 JavaFX helper JVM，避免污染 Minecraft 进程。
 - 保留进度、速度、日志、状态插图、动画、错误帮助和关闭确认界面。
 - 配合新版核心在上方显示网络等待、重试和验证状态；收到新字节后恢复普通文件计数文案，续传和重下方式保留在日志中。速度栏只显示速度，连续 2 秒没有新字节时显示 `0 KB/s`，即使没有收到新的状态回调也会归零。失败时保留当前文件进度并显示零速度。
-- 支持关闭、跳过更新、使用最后可信版本等上游 GUI 协议动作。
+- 失败选择框提供“回退到可信版本”“重试更新”和“退出”。重试需要支持 `requestRetryUpdate()` 的新版核心，会重新获取清单并保留已完成的更新及原始回滚备份。
 - 内嵌固定版本并带 SHA-256 校验的 OpenJFX runtime。
 - helper 无法启动或异常退出时，由上游 main 的 V2 adapter 接管 Swing 回退。
 
@@ -36,7 +36,7 @@ OpenJFX 依赖缓存在本项目的 `lib/javafx/`；缺失时会自动从 Maven 
 最终发布产物保留在：
 
 ```text
-dist/fireflytornado-javafx-preset-1.2.1-win.jar
+dist/fireflytornado-javafx-preset-1.2.2-win.jar
 ```
 
 ## 安装

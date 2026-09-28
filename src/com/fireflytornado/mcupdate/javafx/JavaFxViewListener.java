@@ -19,6 +19,9 @@ interface JavaFxViewListener {
     /** The user chose the last trusted version after a fatal update failure. */
     void userRequestedSkipUpdate();
 
+    /** The user chose to retry with a fresh manifest, keeping installed files. */
+    void userRequestedRetryUpdate();
+
     /** The window was closed while no update was in progress. */
     void windowClosed();
 

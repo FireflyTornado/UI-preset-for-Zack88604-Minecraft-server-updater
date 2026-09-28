@@ -171,6 +171,11 @@ public final class JavaFxPresetEntrypoint implements JavaHelperEntrypoint {
         }
 
         @Override
+        public void userRequestedRetryUpdate() {
+            session.requestRetryUpdate();
+        }
+
+        @Override
         public void windowClosed() {
             session.notifyWindowClosed();
         }

@@ -286,6 +286,7 @@ final class JavaFxUpdateView implements UpdateView {
     private final Button btnErrorHelp = new Button(Lang.text("action.getHelp"));
     private UpdateUiState errorState;
     private boolean recoveryDecisionPending;
+    private boolean retryRequestedLocally;
     /** Local acknowledgement shown immediately after an in-progress skip. */
     private boolean stopRequestedLocally;
     private UpdatePhase stopRequestedFromPhase;
@@ -358,6 +359,8 @@ final class JavaFxUpdateView implements UpdateView {
 
     /** The safe recovery action, created per fatal-error dialog instance. */
     private ButtonType recoveryTrustedType;
+    private ButtonType recoveryRetryType;
+    private ButtonType recoveryExitType;
 
     /** The last log text rendered, for idempotent whole-set replacement. */
     private String lastRenderedLog;
@@ -436,6 +439,12 @@ final class JavaFxUpdateView implements UpdateView {
      */
     @Override
     public void render(UpdateUiState state) {
+        // A retry can fail before an intermediate progress frame reaches us.
+        // Its next snapshot must permit another decision even for the same error.
+        if (retryRequestedLocally) {
+            retryRequestedLocally = false;
+            recoveryDecisionPending = false;
+        }
         currentState = Objects.requireNonNull(state, "state");
         if (stopRequestedLocally) {
             if (state.getPhase() == UpdatePhase.SUCCESS
@@ -1632,7 +1641,7 @@ final class JavaFxUpdateView implements UpdateView {
     }
 
     /**
-     * Ask whether a failed update should exit or try the last trusted version.
+     * Offer the last trusted version, a fresh update attempt, or exit.
      * The view reports intent only; rollback, signature verification and launch
      * authorization remain owned by {@code UpdateController}.
      */
@@ -1644,10 +1653,27 @@ final class JavaFxUpdateView implements UpdateView {
         } finally {
             hideQuitOverlay();
         }
-        recoveryDecisionPending = true;
-        if (choice.isPresent() && choice.get() == recoveryTrustedType) {
+        handleRecoveryChoice(choice.orElse(null));
+    }
+
+    private void handleRecoveryChoice(ButtonType choice) {
+        if (choice == null) {
+            return;
+        }
+        if (choice == recoveryTrustedType) {
+            recoveryDecisionPending = true;
             listener.userRequestedSkipUpdate();
-        } else {
+        } else if (choice == recoveryRetryType) {
+            recoveryDecisionPending = true;
+            retryRequestedLocally = true;
+            filesSeen = 0;
+            filesTotal = 0;
+            lastDlPath = null;
+            stopProgressAnimations();
+            clearRememberedProgress();
+            listener.userRequestedRetryUpdate();
+        } else if (choice == recoveryExitType) {
+            recoveryDecisionPending = true;
             listener.userRequestedClose();
         }
     }
@@ -1670,18 +1696,25 @@ final class JavaFxUpdateView implements UpdateView {
 
         recoveryTrustedType = new ButtonType(Lang.text("recovery.useTrusted"),
                 ButtonBar.ButtonData.OK_DONE);
-        ButtonType exit = new ButtonType(Lang.text("recovery.exit"),
+        recoveryRetryType = new ButtonType(Lang.text("recovery.retry"),
+                ButtonBar.ButtonData.OTHER);
+        recoveryExitType = new ButtonType(Lang.text("recovery.exit"),
                 ButtonBar.ButtonData.CANCEL_CLOSE);
-        alert.getButtonTypes().setAll(recoveryTrustedType, exit);
+        alert.getButtonTypes().setAll(recoveryRetryType, recoveryTrustedType, recoveryExitType);
+        // Keep the requested left-to-right order on every platform.
+        ButtonBar buttonBar = (ButtonBar) alert.getDialogPane().lookup(".button-bar");
+        buttonBar.setButtonOrder(ButtonBar.BUTTON_ORDER_NONE);
         alert.initOwner(stage);
         if (stylesheet != null) {
             alert.getDialogPane().getStylesheets().add(stylesheet);
         }
         alert.getDialogPane().getStyleClass().add("root");
         Button trustedButton = (Button) alert.getDialogPane().lookupButton(recoveryTrustedType);
-        trustedButton.getStyleClass().add("primary-button");
+        trustedButton.getStyleClass().add("trusted-recovery-button");
         trustedButton.setDefaultButton(true);
-        ((Button) alert.getDialogPane().lookupButton(exit))
+        ((Button) alert.getDialogPane().lookupButton(recoveryRetryType))
+                .getStyleClass().add("primary-button");
+        ((Button) alert.getDialogPane().lookupButton(recoveryExitType))
                 .getStyleClass().add("window-close-button");
         return alert;
     }

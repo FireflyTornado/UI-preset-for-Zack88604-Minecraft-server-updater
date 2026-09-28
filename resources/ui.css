@@ -508,6 +508,33 @@
     -fx-border-color: #4AC659;
 }
 
+/* Trusted-version recovery: solid blue, matching the green action's geometry. */
+.button.trusted-recovery-button,
+.button.trusted-recovery-button:default,
+.button.trusted-recovery-button:focused,
+.button.trusted-recovery-button:default:focused {
+    -fx-background-color: #5B9DE9;
+    -fx-background-insets: 0;
+    -fx-background-radius: 6px;
+    -fx-border-color: #5B9DE9;
+    -fx-border-width: 1px;
+    -fx-border-radius: 6px;
+    -fx-text-fill: #0F1417;
+    -fx-font-weight: 600;
+    -fx-font-size: 13px;
+    -fx-padding: 6px 16px 6px 16px;
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+.button.trusted-recovery-button:hover {
+    -fx-background-color: #73AFF0;
+    -fx-border-color: #73AFF0;
+}
+.button.trusted-recovery-button:pressed {
+    -fx-background-color: #478BD6;
+    -fx-border-color: #478BD6;
+}
+
 /* ── Terminal state classes (maintained on .root by setPhase) ─────── */
 
 .root.success-state .status-title {

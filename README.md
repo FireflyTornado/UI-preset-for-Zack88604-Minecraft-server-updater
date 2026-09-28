@@ -20,8 +20,9 @@ and requires that project to load and run.
   New bytes restore the ordinary file counter subtitle; resume/restart details stay in the log.
 - Retains progress, speed, logs, status illustrations, animations, error guidance,
   and close-confirmation UI.
-- Supports upstream GUI protocol actions such as closing, skipping an update,
-  and using the last trusted version.
+- Failed updates offer “Use trusted version”, “Retry update”, and “Exit”.
+  Retry requires an updated core supporting `requestRetryUpdate()`; it fetches a
+  fresh manifest while keeping installed changes and the original rollback backups.
 - Embeds a pinned OpenJFX runtime verified with SHA-256 hashes.
 - Falls back to the upstream main project's Swing UI through its V2 adapter if
   the helper fails to start or exits unexpectedly.
@@ -46,7 +47,7 @@ the build script before they are compiled or packaged.
 The final release artifact is written to:
 
 ```text
-dist/fireflytornado-javafx-preset-1.2.1-win.jar
+dist/fireflytornado-javafx-preset-1.2.2-win.jar
 ```
 
 ## Installation

@@ -111,7 +111,7 @@
 }
 
 /* ERROR content action: deliberately lighter than a primary dialog action and
-   placed over the status header, so it adds no row or height to the window. */
+   placed at the right of the status title, so it adds no extra row. */
 .button.error-help-button {
     -fx-background-color: transparent;
     -fx-background-insets: 0;
@@ -526,11 +526,19 @@
     -fx-focus-color: transparent;
     -fx-faint-focus-color: transparent;
 }
-.button.trusted-recovery-button:hover {
+/* The default focused selector above has four class/pseudo-class terms.
+   Match those states explicitly so hover and press keep their own colors. */
+.button.trusted-recovery-button:hover,
+.button.trusted-recovery-button:default:hover,
+.button.trusted-recovery-button:focused:hover,
+.button.trusted-recovery-button:default:focused:hover {
     -fx-background-color: #73AFF0;
     -fx-border-color: #73AFF0;
 }
-.button.trusted-recovery-button:pressed {
+.button.trusted-recovery-button:pressed,
+.button.trusted-recovery-button:default:pressed,
+.button.trusted-recovery-button:focused:pressed,
+.button.trusted-recovery-button:default:focused:pressed {
     -fx-background-color: #478BD6;
     -fx-border-color: #478BD6;
 }
@@ -599,6 +607,35 @@
     -fx-alignment: center-left;
 }
 
+/* Maintenance copy keeps its full natural height inside a bounded viewport;
+   the illustration and decision buttons remain outside the scrolling content. */
+.maintenance-message-scroll,
+.maintenance-message-scroll > .viewport {
+    -fx-background-color: transparent;
+}
+.maintenance-message-scroll {
+    -fx-padding: 0;
+    -fx-background-insets: 0;
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+.maintenance-message-scroll .scroll-bar:vertical {
+    -fx-background-color: transparent;
+    -fx-pref-width: 10px;
+}
+.maintenance-message-scroll .scroll-bar .track {
+    -fx-background-color: transparent;
+}
+.maintenance-message-scroll .scroll-bar .thumb {
+    -fx-background-color: #3A454D;
+    -fx-background-radius: 5px;
+}
+.maintenance-message-scroll .scroll-bar .increment-button,
+.maintenance-message-scroll .scroll-bar .decrement-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
 .help-dialog {
     /* 360px text + 64px illustration + 16px gap + dialog insets. Keeping the
        preferred width in sync with createHelpAlert prevents wrapped CJK text
@@ -619,4 +656,3 @@
 .dialog-pane > .button-bar .container {
     -fx-padding: 0;
 }
-

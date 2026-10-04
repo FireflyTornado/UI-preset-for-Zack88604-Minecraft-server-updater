@@ -24,6 +24,20 @@ and requires that project to load and run.
   Retry requires an updated core supporting `requestRetryUpdate()`; it fetches a
   fresh manifest while keeping installed changes and the original rollback backups.
 - Embeds a pinned OpenJFX runtime verified with SHA-256 hashes.
+- Retains hover and pressed feedback on the focused default
+  trusted-version button in both maintenance and ordinary recovery dialogs.
+- Version 1.2.3 pairs with the updated me-main core for maintenance mode. When
+  all update sources report maintenance, the main window shows a short instruction
+  without opening a dialog automatically. The status area's top-right “View details”
+  button shows the administrator's verbatim message and opens the two-choice dialog: “Launch trusted
+  version” and “Exit”. Ordinary failures retain “Get help” in that position.
+  Trusted launch delegates rollback and cache verification to the core; exit
+  retains installed changes without starting Minecraft, as does closing the main
+  maintenance window directly. Active rounds and their
+  automatic retries continue; manual retries check maintenance again.
+- Maintenance uses a fixed two-line main-window instruction. The notice dialog
+  fits the owner's screen and scrolls long administrator messages in full while
+  keeping its illustration and both decision buttons outside the scroll area.
 - Falls back to the upstream main project's Swing UI through its V2 adapter if
   the helper fails to start or exits unexpectedly.
 
@@ -47,7 +61,7 @@ the build script before they are compiled or packaged.
 The final release artifact is written to:
 
 ```text
-dist/fireflytornado-javafx-preset-1.2.2-win.jar
+dist/fireflytornado-javafx-preset-1.2.3-win.jar
 ```
 
 ## Installation

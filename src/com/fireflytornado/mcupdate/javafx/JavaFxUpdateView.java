@@ -2,6 +2,7 @@ package com.fireflytornado.mcupdate.javafx;
 
 import com.zack88604.autoupdater.gui.api.ClosePolicy;
 import com.zack88604.autoupdater.gui.api.DownloadProgress;
+import com.zack88604.autoupdater.gui.api.UpdateErrorCode;
 import com.zack88604.autoupdater.gui.api.UpdatePhase;
 import com.zack88604.autoupdater.gui.api.UpdateSummary;
 import com.zack88604.autoupdater.gui.api.UpdateUiState;
@@ -25,6 +26,7 @@ import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TitledPane;
@@ -199,6 +201,7 @@ final class JavaFxUpdateView implements UpdateView {
     private static final String IMG_SUCCESS = "/images/success.png";
     private static final String IMG_ERROR = "/images/error.png";
     private static final String IMG_POPUP = "/images/popup.png";
+    private static final String IMG_MAINTENANCE = "/images/maintenance.png";
     private static final String IMG_TROUBLE = "/images/trouble.png";
 
     // Overall progress area
@@ -280,11 +283,12 @@ final class JavaFxUpdateView implements UpdateView {
     // Debug close button
     private final Button btnClose = new Button(Lang.text("action.close"));
 
-    // ERROR-only lightweight action. It lives in the content header (not the
+    // ERROR-only lightweight help / maintenance-details action. It lives in the content header (not the
     // custom window title bar) and is unmanaged outside ERROR, so it reserves
     // no space in any other phase.
     private final Button btnErrorHelp = new Button(Lang.text("action.getHelp"));
     private UpdateUiState errorState;
+    private boolean maintenanceChoice;
     private boolean recoveryDecisionPending;
     private boolean retryRequestedLocally;
     /** Local acknowledgement shown immediately after an in-progress skip. */
@@ -468,8 +472,10 @@ final class JavaFxUpdateView implements UpdateView {
         updateDownloadWaitingState(state);
         setPhase(state.getPhase());
         errorState = state.getPhase() == UpdatePhase.ERROR ? state : null;
+        btnErrorHelp.setText(Lang.text(isMaintenance(state) ? "maintenance.viewDetails" : "action.getHelp"));
         btnErrorHelp.setVisible(errorState != null);
         btnErrorHelp.setManaged(errorState != null);
+        btnErrorHelp.setDisable(isMaintenance(state) && recoveryDecisionPending);
         applyHeader(state);
         applyOverall(state);
         applyDownload(state);
@@ -477,6 +483,10 @@ final class JavaFxUpdateView implements UpdateView {
         applyServer(state);
         applyLog(state);
         applyCloseButton(state);
+    }
+
+    private static boolean isMaintenance(UpdateUiState state) {
+        return state.getPhase() == UpdatePhase.ERROR && state.getErrorCode() == UpdateErrorCode.MAINTENANCE;
     }
 
     /** Close the window. Must be called on the JavaFX Application Thread. */
@@ -572,6 +582,11 @@ final class JavaFxUpdateView implements UpdateView {
                 break;
             }
             case ERROR: {
+                if (isMaintenance(state)) {
+                    lblStatus.setText(Lang.text("maintenance.title"));
+                    lblDescription.setText(Lang.text("maintenance.description"));
+                    break;
+                }
                 String em = state.getErrorMessage();
                 UpdateSummary s = state.getSummary();
                 boolean safeSkipFailure = isSafeSkipFailure(em);
@@ -1229,7 +1244,7 @@ final class JavaFxUpdateView implements UpdateView {
         IMG_PREPARING, IMG_UPDATER, IMG_CHECKING, IMG_DOWNLOADING,
         IMG_DOWNLOADING_WAITING[0], IMG_DOWNLOADING_WAITING[1],
         IMG_DOWNLOADING_WAITING[2],
-        IMG_CLEANING, IMG_SUCCESS, IMG_ERROR, IMG_POPUP, IMG_TROUBLE,
+        IMG_CLEANING, IMG_SUCCESS, IMG_ERROR, IMG_POPUP, IMG_MAINTENANCE, IMG_TROUBLE,
     };
 
     /**
@@ -1367,6 +1382,12 @@ final class JavaFxUpdateView implements UpdateView {
         if (policy == ClosePolicy.CONFIRM) {
             event.consume();
             confirmQuit();
+        } else if (policy == ClosePolicy.SKIP_OR_EXIT && isMaintenance(currentState)) {
+            event.consume();
+            if (!recoveryDecisionPending) {
+                recoveryDecisionPending = true;
+                listener.userRequestedClose();
+            }
         } else if (policy == ClosePolicy.SKIP_OR_EXIT) {
             event.consume();
             if (!recoveryDecisionPending) {
@@ -1658,6 +1679,10 @@ final class JavaFxUpdateView implements UpdateView {
 
     private void handleRecoveryChoice(ButtonType choice) {
         if (choice == null) {
+            if (maintenanceChoice) {
+                recoveryDecisionPending = true;
+                listener.userRequestedClose();
+            }
             return;
         }
         if (choice == recoveryTrustedType) {
@@ -1680,27 +1705,49 @@ final class JavaFxUpdateView implements UpdateView {
 
     /** Build the recoverable fatal-error decision dialog. */
     Alert createRecoveryAlert(UpdateUiState state) {
+        maintenanceChoice = isMaintenance(state);
+        String title = Lang.text(maintenanceChoice ? "maintenance.title" : "recovery.title");
         Alert alert = new Alert(Alert.AlertType.NONE);
-        alert.setTitle(Lang.text("recovery.title"));
+        alert.setTitle(title);
         alert.initStyle(WINDOW_STYLE);
         makeDialogSceneTransparent(alert);
         alert.setHeaderText(null);
-        Label header = new Label(Lang.text("recovery.title"));
+        Label header = new Label(title);
         header.getStyleClass().add("dialog-header");
         alert.getDialogPane().setHeader(header);
         String upstreamError = state.getErrorMessage() == null || state.getErrorMessage().isEmpty()
-                ? Lang.text("recovery.defaultError")
+                ? Lang.text(maintenanceChoice ? "maintenance.defaultMessage" : "recovery.defaultError")
                 : UpstreamText.error(state.getErrorMessage(), state.getErrorCode());
-        alert.getDialogPane().setContent(dialogContentWithIllustration(
-                dialogMessage(Lang.text("recovery.message", upstreamError)), IMG_POPUP));
+        Label maintenanceMessage = maintenanceChoice ? dialogMessage(upstreamError) : null;
+        ScrollPane maintenanceScroll = null;
+        if (maintenanceChoice) {
+            // The complete administrator message lives in the scroll content.
+            // Its natural height must never be compressed into an ellipsis.
+            maintenanceMessage.setMinWidth(0);
+            maintenanceMessage.setMaxWidth(Double.MAX_VALUE);
+            maintenanceMessage.setMinHeight(Region.USE_PREF_SIZE);
+            maintenanceScroll = new ScrollPane(maintenanceMessage);
+            maintenanceScroll.setFitToWidth(true);
+            maintenanceScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+            maintenanceScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+            maintenanceScroll.setPrefViewportWidth(HELP_SUGGESTIONS_WIDTH);
+            maintenanceScroll.setMinHeight(0);
+            maintenanceScroll.setMaxHeight(Region.USE_PREF_SIZE);
+            maintenanceScroll.getStyleClass().add("maintenance-message-scroll");
+            alert.getDialogPane().setContent(dialogContentWithIllustration(maintenanceScroll, IMG_MAINTENANCE));
+        } else {
+            alert.getDialogPane().setContent(dialogContentWithIllustration(
+                    dialogMessage(Lang.text("recovery.message", upstreamError)), IMG_POPUP));
+        }
 
-        recoveryTrustedType = new ButtonType(Lang.text("recovery.useTrusted"),
+        recoveryTrustedType = new ButtonType(Lang.text(maintenanceChoice ? "maintenance.useTrusted" : "recovery.useTrusted"),
                 ButtonBar.ButtonData.OK_DONE);
-        recoveryRetryType = new ButtonType(Lang.text("recovery.retry"),
+        recoveryRetryType = maintenanceChoice ? null : new ButtonType(Lang.text("recovery.retry"),
                 ButtonBar.ButtonData.OTHER);
         recoveryExitType = new ButtonType(Lang.text("recovery.exit"),
                 ButtonBar.ButtonData.CANCEL_CLOSE);
-        alert.getButtonTypes().setAll(recoveryRetryType, recoveryTrustedType, recoveryExitType);
+        if (maintenanceChoice) alert.getButtonTypes().setAll(recoveryTrustedType, recoveryExitType);
+        else alert.getButtonTypes().setAll(recoveryRetryType, recoveryTrustedType, recoveryExitType);
         // Keep the requested left-to-right order on every platform.
         ButtonBar buttonBar = (ButtonBar) alert.getDialogPane().lookup(".button-bar");
         buttonBar.setButtonOrder(ButtonBar.BUTTON_ORDER_NONE);
@@ -1712,16 +1759,66 @@ final class JavaFxUpdateView implements UpdateView {
         Button trustedButton = (Button) alert.getDialogPane().lookupButton(recoveryTrustedType);
         trustedButton.getStyleClass().add("trusted-recovery-button");
         trustedButton.setDefaultButton(true);
-        ((Button) alert.getDialogPane().lookupButton(recoveryRetryType))
-                .getStyleClass().add("primary-button");
+        if (recoveryRetryType != null) {
+            ((Button) alert.getDialogPane().lookupButton(recoveryRetryType))
+                    .getStyleClass().add("primary-button");
+        }
         ((Button) alert.getDialogPane().lookupButton(recoveryExitType))
                 .getStyleClass().add("window-close-button");
+        if (maintenanceChoice) {
+            configureMaintenanceDialog(alert, maintenanceScroll, maintenanceMessage);
+        }
         return alert;
     }
 
-    private void showErrorHelp() {
+    /** Keep the notice scrollable and both decisions inside the owner's screen. */
+    private void configureMaintenanceDialog(Alert alert, ScrollPane scroll, Label message) {
+        Rectangle2D bounds = currentScreenVisualBounds();
+        alert.getDialogPane().getStyleClass().add("maintenance-dialog");
+        alert.getDialogPane().setPrefWidth(Math.min(500, bounds.getWidth() - 48));
+        // Bound the first preferred-size measurement before the native window
+        // opens. The on-shown pass then uses the actual styled viewport/insets.
+        scroll.setPrefViewportHeight(Math.min(message.prefHeight(HELP_SUGGESTIONS_WIDTH),
+                Math.max(32, bounds.getHeight() - 220)));
+        alert.setOnShown(event -> {
+            fitMaintenanceDialog(alert, scroll, message, currentScreenVisualBounds());
+            Platform.runLater(() -> {
+                if (alert.isShowing()) {
+                    fitMaintenanceDialog(alert, scroll, message, currentScreenVisualBounds());
+                }
+            });
+        });
+    }
+
+    private void fitMaintenanceDialog(Alert alert, ScrollPane scroll, Label message, Rectangle2D bounds) {
+        javafx.scene.control.DialogPane pane = alert.getDialogPane();
+        Stage dialog = (Stage) pane.getScene().getWindow();
+        double maxWidth = bounds.getWidth() - 48;
+        double maxHeight = bounds.getHeight() - 48;
+        pane.setPrefWidth(Math.min(500, maxWidth));
+        pane.applyCss();
+        pane.layout();
+        double viewportWidth = Math.max(1, scroll.getViewportBounds().getWidth());
+        double chromeHeight = dialog.getHeight() - scroll.getViewportBounds().getHeight();
+        double viewportHeight = Math.max(1, maxHeight - chromeHeight);
+        scroll.setPrefViewportHeight(Math.min(message.prefHeight(viewportWidth), viewportHeight));
+        dialog.sizeToScene();
+        dialog.setWidth(Math.min(dialog.getWidth(), maxWidth));
+        dialog.setHeight(Math.min(dialog.getHeight(), maxHeight));
+        // Centre over the owner, clamping to this monitor's visual bounds.
+        double x = stage.getX() + (stage.getWidth() - dialog.getWidth()) / 2;
+        double y = stage.getY() + (stage.getHeight() - dialog.getHeight()) / 2;
+        dialog.setX(Math.max(bounds.getMinX() + 24, Math.min(x, bounds.getMaxX() - dialog.getWidth() - 24)));
+        dialog.setY(Math.max(bounds.getMinY() + 24, Math.min(y, bounds.getMaxY() - dialog.getHeight() - 24)));
+    }
+
+    private void showStatusAction() {
         UpdateUiState snapshot = errorState;
-        if (snapshot == null || phase != UpdatePhase.ERROR) {
+        if (snapshot == null || phase != UpdatePhase.ERROR || closing) {
+            return;
+        }
+        if (isMaintenance(snapshot)) {
+            if (!recoveryDecisionPending) showRecoveryChoice(snapshot);
             return;
         }
         showQuitOverlay();
@@ -1840,7 +1937,13 @@ final class JavaFxUpdateView implements UpdateView {
         statusStack.getChildren().addAll(statusFront, statusBack);
         hideStatusImage();
         preloadStatusImages();
-        VBox statusText = new VBox(4, lblStatus, lblDescription);
+        lblStatus.setMinWidth(0);
+        lblStatus.setMaxWidth(Double.MAX_VALUE);
+        HBox statusTitle = new HBox(12, lblStatus, btnErrorHelp);
+        statusTitle.setAlignment(Pos.TOP_LEFT);
+        HBox.setHgrow(lblStatus, Priority.ALWAYS);
+        VBox statusText = new VBox(4, statusTitle, lblDescription);
+        statusText.setMinWidth(0);
         HBox statusHeader = new HBox(12, statusStack, statusText);
         statusHeader.getStyleClass().add("status-header");
         statusHeader.setAlignment(Pos.CENTER_LEFT);
@@ -1848,9 +1951,8 @@ final class JavaFxUpdateView implements UpdateView {
         btnErrorHelp.getStyleClass().add("error-help-button");
         btnErrorHelp.setVisible(false);
         btnErrorHelp.setManaged(false);
-        btnErrorHelp.setOnAction(e -> showErrorHelp());
-        StackPane statusHeaderLayer = new StackPane(statusHeader, btnErrorHelp);
-        StackPane.setAlignment(btnErrorHelp, Pos.TOP_RIGHT);
+        btnErrorHelp.setOnAction(e -> showStatusAction());
+        StackPane statusHeaderLayer = new StackPane(statusHeader);
 
         // Overall progress area: bar + percent label.
         overallArea.getStyleClass().add("overall-progress");

@@ -23,6 +23,7 @@ final class UpstreamText {
     private static final Map<String, String> EXACT_STATUS_KEYS = Map.ofEntries(
             Map.entry("Preparing update...", "status.preparing"),
             Map.entry("Checking for updates...", "status.preparing"),
+            Map.entry("Servers under maintenance", "maintenance.title"),
             Map.entry("Cleaning up…", "status.cleaning"),
             Map.entry("Verifying updated resources before caching...",
                     "upstream.status.verifyingUpdated"),
@@ -146,6 +147,7 @@ final class UpstreamText {
     }
 
     static String error(String value, UpdateErrorCode errorCode) {
+        if (errorCode == UpdateErrorCode.MAINTENANCE) return value;
         if (value == null || value.isEmpty()) {
             return value;
         }

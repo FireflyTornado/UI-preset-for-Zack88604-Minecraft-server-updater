@@ -148,6 +148,10 @@ final class JavaFxUpdateView implements UpdateView {
     // ~6%.
     private static final double OVERLAY_FADE_MS = 120;
     private static final double OVERLAY_OPACITY = 0.35;
+    private static final double DIALOG_SCREEN_MARGIN = 24;
+    // A neutral result outside the decision button bar: never an exit or recovery choice.
+    private static final ButtonType DIALOG_DISMISS_RESULT =
+            new ButtonType("", ButtonBar.ButtonData.OTHER);
 
     private static final String FOOTER_COPYRIGHT =
             "Developed by Zack88604 · MIT License · UI redesign by Eternity_Riguru";
@@ -1554,11 +1558,9 @@ final class JavaFxUpdateView implements UpdateView {
      * constructed inline) so the screenshot harness can render it. Uses
      * {@link Alert.AlertType#NONE} so no default Question icon appears.
      *
-     * <p>The dialog is frameless like the main window (no system title bar) and
-     * deliberately carries no extra × — it can only be ended by the existing
-     * "Keep updating" / "Skip update" buttons (begin/cancel close confirmation
-     * and the final close decision stay untouched). With the title bar gone, the
-     * "Quit update?" title is shown as a styled header inside the dialog instead.</p>
+     * <p>The dialog is frameless like the main window (no system title bar).
+     * Its header contains the title and a × that dismisses only this dialog;
+     * abandoning the update still requires the explicit "Skip update" choice.</p>
      */
     Alert createQuitAlert() {
         Alert alert = new Alert(Alert.AlertType.NONE);
@@ -1581,9 +1583,7 @@ final class JavaFxUpdateView implements UpdateView {
             }
         });
         alert.setHeaderText(null);
-        Label header = new Label(Lang.text("quit.title"));
-        header.getStyleClass().add("dialog-header");
-        alert.getDialogPane().setHeader(header);
+        setDialogHeader(alert, Lang.text("quit.title"));
         alert.getDialogPane().setContent(dialogContentWithIllustration(
                 dialogMessage(Lang.text("quit.message")), IMG_POPUP));
         ButtonType stay = new ButtonType(Lang.text("quit.keepUpdating"),
@@ -1603,6 +1603,7 @@ final class JavaFxUpdateView implements UpdateView {
         ((Button) alert.getDialogPane().lookupButton(stay)).setDefaultButton(true);
         Button skipButton = (Button) alert.getDialogPane().lookupButton(quitSkipType);
         skipButton.getStyleClass().add("window-close-button");
+        configureDialogPosition(alert);
         return alert;
     }
 
@@ -1619,9 +1620,7 @@ final class JavaFxUpdateView implements UpdateView {
         alert.initStyle(WINDOW_STYLE);
         makeDialogSceneTransparent(alert);
         alert.setHeaderText(null);
-        Label header = new Label(Lang.text("help.title"));
-        header.getStyleClass().add("dialog-header");
-        alert.getDialogPane().setHeader(header);
+        setDialogHeader(alert, Lang.text("help.title"));
 
         VBox suggestions = new VBox(8);
         suggestions.getStyleClass().add("help-suggestions");
@@ -1653,11 +1652,7 @@ final class JavaFxUpdateView implements UpdateView {
         }
         alert.getDialogPane().getStyleClass().addAll("root", "help-dialog");
         ((Button) alert.getDialogPane().lookupButton(close)).getStyleClass().add("primary-button");
-        alert.setOnShown(e -> {
-            Window dialog = alert.getDialogPane().getScene().getWindow();
-            dialog.setX(stage.getX() + (stage.getWidth() - dialog.getWidth()) / 2.0);
-            dialog.setY(stage.getY() + (stage.getHeight() - dialog.getHeight()) / 2.0);
-        });
+        configureDialogPosition(alert);
         return alert;
     }
 
@@ -1678,6 +1673,9 @@ final class JavaFxUpdateView implements UpdateView {
     }
 
     private void handleRecoveryChoice(ButtonType choice) {
+        if (choice == DIALOG_DISMISS_RESULT) {
+            return;
+        }
         if (choice == null) {
             if (maintenanceChoice) {
                 recoveryDecisionPending = true;
@@ -1712,9 +1710,7 @@ final class JavaFxUpdateView implements UpdateView {
         alert.initStyle(WINDOW_STYLE);
         makeDialogSceneTransparent(alert);
         alert.setHeaderText(null);
-        Label header = new Label(title);
-        header.getStyleClass().add("dialog-header");
-        alert.getDialogPane().setHeader(header);
+        setDialogHeader(alert, title);
         String upstreamError = state.getErrorMessage() == null || state.getErrorMessage().isEmpty()
                 ? Lang.text(maintenanceChoice ? "maintenance.defaultMessage" : "recovery.defaultError")
                 : UpstreamText.error(state.getErrorMessage(), state.getErrorCode());
@@ -1767,6 +1763,8 @@ final class JavaFxUpdateView implements UpdateView {
                 .getStyleClass().add("window-close-button");
         if (maintenanceChoice) {
             configureMaintenanceDialog(alert, maintenanceScroll, maintenanceMessage);
+        } else {
+            configureDialogPosition(alert);
         }
         return alert;
     }
@@ -1775,26 +1773,20 @@ final class JavaFxUpdateView implements UpdateView {
     private void configureMaintenanceDialog(Alert alert, ScrollPane scroll, Label message) {
         Rectangle2D bounds = currentScreenVisualBounds();
         alert.getDialogPane().getStyleClass().add("maintenance-dialog");
-        alert.getDialogPane().setPrefWidth(Math.min(500, bounds.getWidth() - 48));
+        alert.getDialogPane().setPrefWidth(Math.min(500, bounds.getWidth() - 2 * DIALOG_SCREEN_MARGIN));
         // Bound the first preferred-size measurement before the native window
         // opens. The on-shown pass then uses the actual styled viewport/insets.
         scroll.setPrefViewportHeight(Math.min(message.prefHeight(HELP_SUGGESTIONS_WIDTH),
                 Math.max(32, bounds.getHeight() - 220)));
-        alert.setOnShown(event -> {
-            fitMaintenanceDialog(alert, scroll, message, currentScreenVisualBounds());
-            Platform.runLater(() -> {
-                if (alert.isShowing()) {
-                    fitMaintenanceDialog(alert, scroll, message, currentScreenVisualBounds());
-                }
-            });
-        });
+        configureDialogPosition(alert,
+                () -> fitMaintenanceDialog(alert, scroll, message, currentScreenVisualBounds()));
     }
 
     private void fitMaintenanceDialog(Alert alert, ScrollPane scroll, Label message, Rectangle2D bounds) {
         javafx.scene.control.DialogPane pane = alert.getDialogPane();
         Stage dialog = (Stage) pane.getScene().getWindow();
-        double maxWidth = bounds.getWidth() - 48;
-        double maxHeight = bounds.getHeight() - 48;
+        double maxWidth = bounds.getWidth() - 2 * DIALOG_SCREEN_MARGIN;
+        double maxHeight = bounds.getHeight() - 2 * DIALOG_SCREEN_MARGIN;
         pane.setPrefWidth(Math.min(500, maxWidth));
         pane.applyCss();
         pane.layout();
@@ -1805,11 +1797,65 @@ final class JavaFxUpdateView implements UpdateView {
         dialog.sizeToScene();
         dialog.setWidth(Math.min(dialog.getWidth(), maxWidth));
         dialog.setHeight(Math.min(dialog.getHeight(), maxHeight));
-        // Centre over the owner, clamping to this monitor's visual bounds.
+    }
+
+    /** Shared title row; the close control never selects a business action. */
+    private static void setDialogHeader(Alert alert, String title) {
+        Label label = new Label(title);
+        label.getStyleClass().add("dialog-header");
+        label.setMinWidth(0);
+        label.setMaxWidth(Double.MAX_VALUE);
+        label.setWrapText(true);
+        label.setMinHeight(Region.USE_PREF_SIZE);
+        HBox.setHgrow(label, Priority.ALWAYS);
+
+        Button close = new Button("\u00d7");
+        close.getStyleClass().addAll("window-close-button", "dialog-close-button");
+        close.setAccessibleText(Lang.text("action.close"));
+        close.setMinSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
+        close.setOnAction(event -> {
+            // A non-null result also permits closing the two-choice quit Alert,
+            // whose buttons intentionally do not include a CANCEL_CLOSE action.
+            alert.setResult(DIALOG_DISMISS_RESULT);
+            alert.close();
+        });
+        HBox header = new HBox(12, label, close);
+        header.setAlignment(Pos.CENTER_LEFT);
+        alert.getDialogPane().setHeader(header);
+    }
+
+    private void configureDialogPosition(Alert alert) {
+        configureDialogPosition(alert, () -> {});
+    }
+
+    /** Apply the same placement after layout to every business dialog. */
+    private void configureDialogPosition(Alert alert, Runnable fitContent) {
+        Runnable place = () -> {
+            alert.getDialogPane().applyCss();
+            alert.getDialogPane().layout();
+            fitContent.run();
+            positionDialogWithinOwnerScreen(alert, currentScreenVisualBounds());
+        };
+        alert.setOnShown(event -> {
+            place.run();
+            // Recheck once after the native window and wrapped content settle.
+            Platform.runLater(() -> {
+                if (alert.isShowing()) {
+                    place.run();
+                }
+            });
+        });
+    }
+
+    /** Dialogs may extend beyond the owner; only the screen bounds constrain them. */
+    private void positionDialogWithinOwnerScreen(Alert alert, Rectangle2D bounds) {
+        Window dialog = alert.getDialogPane().getScene().getWindow();
         double x = stage.getX() + (stage.getWidth() - dialog.getWidth()) / 2;
         double y = stage.getY() + (stage.getHeight() - dialog.getHeight()) / 2;
-        dialog.setX(Math.max(bounds.getMinX() + 24, Math.min(x, bounds.getMaxX() - dialog.getWidth() - 24)));
-        dialog.setY(Math.max(bounds.getMinY() + 24, Math.min(y, bounds.getMaxY() - dialog.getHeight() - 24)));
+        dialog.setX(Math.max(bounds.getMinX() + DIALOG_SCREEN_MARGIN,
+                Math.min(x, bounds.getMaxX() - dialog.getWidth() - DIALOG_SCREEN_MARGIN)));
+        dialog.setY(Math.max(bounds.getMinY() + DIALOG_SCREEN_MARGIN,
+                Math.min(y, bounds.getMaxY() - dialog.getHeight() - DIALOG_SCREEN_MARGIN)));
     }
 
     private void showStatusAction() {
@@ -2137,7 +2183,7 @@ final class JavaFxUpdateView implements UpdateView {
         double cx = stage.getX() + stage.getWidth() / 2.0;
         double cy = stage.getY() + stage.getHeight() / 2.0;
         for (Screen s : Screen.getScreens()) {
-            if (s.getVisualBounds().contains(cx, cy)) {
+            if (s.getBounds().contains(cx, cy)) {
                 screen = s;
                 break;
             }

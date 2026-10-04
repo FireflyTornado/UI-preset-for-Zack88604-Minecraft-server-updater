@@ -2,6 +2,8 @@
 
 English | [简体中文](README_CN.md)
 
+Current version: **1.2.4**.
+
 This is a V2 `java-helper` GUI preset loaded by the Minecraft auto-update agent.
 The JavaFX window runs in a separate helper JVM, preventing the Minecraft JVM
 from loading `javafx.*`.
@@ -20,13 +22,20 @@ and requires that project to load and run.
   New bytes restore the ordinary file counter subtitle; resume/restart details stay in the log.
 - Retains progress, speed, logs, status illustrations, animations, error guidance,
   and close-confirmation UI.
+- Quit confirmation, recovery choices, maintenance details and error guidance
+  share owner-centred placement, adjusted at screen edges to leave a 24px margin
+  within the current monitor's usable area. Dialogs may extend beyond the main
+  window and retain their individual content sizes.
+- The top-right × dismisses only the current dialog without selecting exit,
+  retry or trusted-version launch. Dismissing quit confirmation releases its
+  temporary pause so the existing update can continue.
 - Failed updates offer “Use trusted version”, “Retry update”, and “Exit”.
   Retry requires an updated core supporting `requestRetryUpdate()`; it fetches a
   fresh manifest while keeping installed changes and the original rollback backups.
 - Embeds a pinned OpenJFX runtime verified with SHA-256 hashes.
 - Retains hover and pressed feedback on the focused default
   trusted-version button in both maintenance and ordinary recovery dialogs.
-- Version 1.2.3 pairs with the updated me-main core for maintenance mode. When
+- Since version 1.2.3, the preset pairs with the updated me-main core for maintenance mode. When
   all update sources report maintenance, the main window shows a short instruction
   without opening a dialog automatically. The status area's top-right “View details”
   button shows the administrator's verbatim message and opens the two-choice dialog: “Launch trusted
@@ -61,7 +70,7 @@ the build script before they are compiled or packaged.
 The final release artifact is written to:
 
 ```text
-dist/fireflytornado-javafx-preset-1.2.3-win.jar
+dist/fireflytornado-javafx-preset-1.2.4-win.jar
 ```
 
 ## Installation

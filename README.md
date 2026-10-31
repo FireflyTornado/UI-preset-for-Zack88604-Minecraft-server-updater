@@ -35,7 +35,7 @@ and requires that project to load and run.
 - Embeds a pinned OpenJFX runtime verified with SHA-256 hashes.
 - Retains hover and pressed feedback on the focused default
   trusted-version button in both maintenance and ordinary recovery dialogs.
-- Since version 1.2.3, the preset pairs with the updated me-main core for maintenance mode. When
+- Since version 1.2.3, the preset pairs with the updated `minecraft-server-updater-for656` core for maintenance mode. When
   all update sources report maintenance, the main window shows a short instruction
   without opening a dialog automatically. The status area's top-right “View details”
   button shows the administrator's verbatim message and opens the two-choice dialog: “Launch trusted
@@ -47,7 +47,7 @@ and requires that project to load and run.
 - Maintenance uses a fixed two-line main-window instruction. The notice dialog
   fits the owner's screen and scrolls long administrator messages in full while
   keeping its illustration and both decision buttons outside the scroll area.
-- Falls back to the upstream main project's Swing UI through its V2 adapter if
+- Falls back to the updater's Swing UI through its V2 adapter if
   the helper fails to start or exits unexpectedly.
 
 ## Building
@@ -103,9 +103,9 @@ to launch Minecraft and copy only that artifact to:
 <game-dir>/.mc-update/gui-presets/
 ```
 
-Delete `<game-dir>/.mc-update/gui-selection.properties` to make the upstream
-main project display the GUI selector again on the next launch. When an external
-preset is selected for the first time, the main project displays a warning about
+Delete `<game-dir>/.mc-update/gui-selection.properties` to make the updater
+display the GUI selector again on the next launch. When an external
+preset is selected for the first time, the updater displays a warning about
 the risks of running external code.
 
 ## Platform and Runtime
@@ -124,8 +124,13 @@ the risks of running external code.
 - Linux ARM64, native Windows ARM64, and 32-bit runtimes are not included.
 - Platform packaging does not imply UI testing on every target; validate the
   helper on each supported OS/JVM and satisfy JavaFX's system requirements.
-- Automatic platform selection/download in `me-main` is a separate change;
-  its current server-preset descriptor still offers a single artifact.
+- The build writes `target-os` / `target-arch` into each JAR's metadata for
+  validation by the updated core and server.
+- An updated `minecraft-server-updater-for656` supporting `/api/v3/gui-preset` can automatically download
+  the matching JVM platform variant. Configure only the platforms being published
+  under `generation.gui_preset.variants`; Windows-only releases are valid. Enable
+  `server-gui=recommended` or `required` on clients; unmatched environments use Swing.
+  Retain `file` to offer a legacy single artifact. Old cores ignore the added metadata.
 
 ## License and Attribution
 

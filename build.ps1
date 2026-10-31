@@ -245,6 +245,15 @@ Set-Content -LiteralPath (Join-Path $stageDir "META-INF/mc-update-runtime.proper
 $guiMetadataPath = Join-Path $stageDir "META-INF/mc-update-gui.properties"
 $guiMetadata = (Get-Content -Raw -LiteralPath $guiMetadataPath) `
         -replace '(?m)^version=.*$', "version=$Version"
+$targetPlatforms = @{
+    "win" = @("windows", "x64")
+    "linux" = @("linux", "x64")
+    "mac" = @("macos", "x64")
+    "mac-aarch64" = @("macos", "arm64")
+}
+$targetPlatform = $targetPlatforms[$Classifier]
+$guiMetadata = $guiMetadata.TrimEnd() + "`ntarget-os=$($targetPlatform[0])" +
+        "`ntarget-arch=$($targetPlatform[1])`n"
 Set-Content -LiteralPath $guiMetadataPath -Value $guiMetadata -Encoding ascii -NoNewline
 
 Write-Host "[build] Packaging $artifact"

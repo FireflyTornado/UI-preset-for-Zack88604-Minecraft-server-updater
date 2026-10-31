@@ -13,12 +13,17 @@ credits the UI redesign to Eternity_Riguru.
 
 ## OpenJFX
 
-The Windows preset artifact embeds these OpenJFX 21.0.4 runtime modules obtained
-from Maven Central:
+Each platform preset artifact embeds these OpenJFX 21.0.4 runtime modules
+obtained from Maven Central, using its own platform classifier:
 
-- `org.openjfx:javafx-base:21.0.4:win`
-- `org.openjfx:javafx-graphics:21.0.4:win`
-- `org.openjfx:javafx-controls:21.0.4:win`
+- `org.openjfx:javafx-base:21.0.4:<classifier>`
+- `org.openjfx:javafx-graphics:21.0.4:<classifier>`
+- `org.openjfx:javafx-controls:21.0.4:<classifier>`
+
+The classifiers are `win` (Windows x64), `linux` (Linux x64), `mac` (macOS x64),
+and `mac-aarch64` (macOS ARM64). Dependencies are downloaded into the local,
+Git-ignored `lib/javafx/` cache when missing and checked against pinned SHA-256
+hashes in `build.ps1`; binary dependencies are not stored in the source repository.
 
 OpenJFX is licensed under the GNU General Public License, version 2, with the
 Classpath Exception. Copies of the relevant license materials are included in

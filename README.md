@@ -52,11 +52,26 @@ and requires that project to load and run.
 
 ## Building
 
-JDK 17 or later is required. On Windows, run:
+JDK 17 or later is required. On Windows, build all four platform presets with:
 
 ```bat
 build.bat
 ```
+
+To build just one platform, pass its OpenJFX classifier:
+
+```bat
+build.bat -Classifier win
+build.bat -Classifier linux
+build.bat -Classifier mac
+build.bat -Classifier mac-aarch64
+```
+
+PowerShell users can also run `./build.ps1` (all four platforms) or
+`./build.ps1 -Classifier mac-aarch64`. All targets can be packaged from the same
+build machine; opening the UI must be tested on the corresponding OS and JVM
+architecture. Each build replaces only its matching artifact and preserves
+other platforms and versions already in `dist/`.
 
 The updater API contract required by the build is stored in this project's
 `provided-api/` directory. It is used only for compilation and is not included
@@ -64,18 +79,25 @@ in the preset JAR.
 
 OpenJFX dependencies are cached in this project's `lib/javafx/` directory and
 downloaded automatically from Maven Central when missing. The pinned OpenJFX
-21.0.4 Windows dependencies are checked against the SHA-256 hashes embedded in
-the build script before they are compiled or packaged.
+21.0.4 dependencies for all four targets are checked against the SHA-256 hashes
+embedded in the build script before compilation or packaging. Each target uses
+only its own three runtime JARs, even when the cache contains multiple platforms.
+The cache (`lib/`), temporary build directory (`build/`), and release artifacts
+(`dist/`) are ignored by Git; dependencies do not need to be committed.
 
-The final release artifact is written to:
+The final release artifacts follow the existing version/classifier naming:
 
 ```text
 dist/fireflytornado-javafx-preset-1.2.4-win.jar
+dist/fireflytornado-javafx-preset-1.2.4-linux.jar
+dist/fireflytornado-javafx-preset-1.2.4-mac.jar
+dist/fireflytornado-javafx-preset-1.2.4-mac-aarch64.jar
 ```
 
 ## Installation
 
-Copy the artifact to the following directory under the game directory:
+Choose the artifact matching the OS and architecture of the Java runtime used
+to launch Minecraft and copy only that artifact to:
 
 ```text
 <game-dir>/.mc-update/gui-presets/
@@ -88,11 +110,22 @@ the risks of running external code.
 
 ## Platform and Runtime
 
-- The current release target is Windows, using the OpenJFX `win` classifier.
+| OS | JVM architecture | OpenJFX classifier / filename suffix |
+|----|------------------|--------------------------------------|
+| Windows | x64 (`amd64` / `x86_64`) | `win` |
+| Linux | x64 (`amd64` / `x86_64`) | `linux` |
+| macOS | x64 (`amd64` / `x86_64`) | `mac` |
+| macOS | ARM64 (`aarch64` / `arm64`) | `mac-aarch64` |
+
+- Each artifact embeds only the runtime for its target platform.
 - JavaFX is pinned to version 21.0.4, and the helper requires Java 17 or later.
 - `javafx-base`, `javafx-graphics`, and `javafx-controls` are embedded.
 - The updater API is a provided dependency and is not duplicated in the preset.
-- Linux and macOS runtimes are not yet included in the current artifact.
+- Linux ARM64, native Windows ARM64, and 32-bit runtimes are not included.
+- Platform packaging does not imply UI testing on every target; validate the
+  helper on each supported OS/JVM and satisfy JavaFX's system requirements.
+- Automatic platform selection/download in `me-main` is a separate change;
+  its current server-preset descriptor still offers a single artifact.
 
 ## License and Attribution
 

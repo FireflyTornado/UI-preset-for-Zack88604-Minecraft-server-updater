@@ -35,7 +35,7 @@ and requires that project to load and run.
 - Embeds a pinned OpenJFX runtime verified with SHA-256 hashes.
 - Retains hover and pressed feedback on the focused default
   trusted-version button in both maintenance and ordinary recovery dialogs.
-- Since version 1.2.3, the preset pairs with the updated me-main core for maintenance mode. When
+- Since version 1.2.3, the preset pairs with the updated `minecraft-server-updater-for656` core for maintenance mode. When
   all update sources report maintenance, the main window shows a short instruction
   without opening a dialog automatically. The status area's top-right “View details”
   button shows the administrator's verbatim message and opens the two-choice dialog: “Launch trusted
@@ -47,16 +47,31 @@ and requires that project to load and run.
 - Maintenance uses a fixed two-line main-window instruction. The notice dialog
   fits the owner's screen and scrolls long administrator messages in full while
   keeping its illustration and both decision buttons outside the scroll area.
-- Falls back to the upstream main project's Swing UI through its V2 adapter if
+- Falls back to the updater's Swing UI through its V2 adapter if
   the helper fails to start or exits unexpectedly.
 
 ## Building
 
-JDK 17 or later is required. On Windows, run:
+JDK 17 or later is required. On Windows, build all four platform presets with:
 
 ```bat
 build.bat
 ```
+
+To build just one platform, pass its OpenJFX classifier:
+
+```bat
+build.bat -Classifier win
+build.bat -Classifier linux
+build.bat -Classifier mac
+build.bat -Classifier mac-aarch64
+```
+
+PowerShell users can also run `./build.ps1` (all four platforms) or
+`./build.ps1 -Classifier mac-aarch64`. All targets can be packaged from the same
+build machine; opening the UI must be tested on the corresponding OS and JVM
+architecture. Each build replaces only its matching artifact and preserves
+other platforms and versions already in `dist/`.
 
 The updater API contract required by the build is stored in this project's
 `provided-api/` directory. It is used only for compilation and is not included
@@ -64,35 +79,58 @@ in the preset JAR.
 
 OpenJFX dependencies are cached in this project's `lib/javafx/` directory and
 downloaded automatically from Maven Central when missing. The pinned OpenJFX
-21.0.4 Windows dependencies are checked against the SHA-256 hashes embedded in
-the build script before they are compiled or packaged.
+21.0.4 dependencies for all four targets are checked against the SHA-256 hashes
+embedded in the build script before compilation or packaging. Each target uses
+only its own three runtime JARs, even when the cache contains multiple platforms.
+The cache (`lib/`), temporary build directory (`build/`), and release artifacts
+(`dist/`) are ignored by Git; dependencies do not need to be committed.
 
-The final release artifact is written to:
+The final release artifacts follow the existing version/classifier naming:
 
 ```text
 dist/fireflytornado-javafx-preset-1.2.4-win.jar
+dist/fireflytornado-javafx-preset-1.2.4-linux.jar
+dist/fireflytornado-javafx-preset-1.2.4-mac.jar
+dist/fireflytornado-javafx-preset-1.2.4-mac-aarch64.jar
 ```
 
 ## Installation
 
-Copy the artifact to the following directory under the game directory:
+Choose the artifact matching the OS and architecture of the Java runtime used
+to launch Minecraft and copy only that artifact to:
 
 ```text
 <game-dir>/.mc-update/gui-presets/
 ```
 
-Delete `<game-dir>/.mc-update/gui-selection.properties` to make the upstream
-main project display the GUI selector again on the next launch. When an external
-preset is selected for the first time, the main project displays a warning about
+Delete `<game-dir>/.mc-update/gui-selection.properties` to make the updater
+display the GUI selector again on the next launch. When an external
+preset is selected for the first time, the updater displays a warning about
 the risks of running external code.
 
 ## Platform and Runtime
 
-- The current release target is Windows, using the OpenJFX `win` classifier.
+| OS | JVM architecture | OpenJFX classifier / filename suffix |
+|----|------------------|--------------------------------------|
+| Windows | x64 (`amd64` / `x86_64`) | `win` |
+| Linux | x64 (`amd64` / `x86_64`) | `linux` |
+| macOS | x64 (`amd64` / `x86_64`) | `mac` |
+| macOS | ARM64 (`aarch64` / `arm64`) | `mac-aarch64` |
+
+- Each artifact embeds only the runtime for its target platform.
 - JavaFX is pinned to version 21.0.4, and the helper requires Java 17 or later.
 - `javafx-base`, `javafx-graphics`, and `javafx-controls` are embedded.
 - The updater API is a provided dependency and is not duplicated in the preset.
-- Linux and macOS runtimes are not yet included in the current artifact.
+- Linux ARM64, native Windows ARM64, and 32-bit runtimes are not included.
+- Platform packaging does not imply UI testing on every target; validate the
+  helper on each supported OS/JVM and satisfy JavaFX's system requirements.
+- The build writes `target-os` / `target-arch` into each JAR's metadata for
+  validation by the updated core and server.
+- An updated `minecraft-server-updater-for656` supporting `/api/v3/gui-preset` can automatically download
+  the matching JVM platform variant. Configure only the platforms being published
+  under `generation.gui_preset.variants`; Windows-only releases are valid. Enable
+  `server-gui=recommended` or `required` on clients; unmatched environments use Swing.
+  Retain `file` to offer a legacy single artifact. Old cores ignore the added metadata.
 
 ## License and Attribution
 
